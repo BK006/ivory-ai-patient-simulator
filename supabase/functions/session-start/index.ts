@@ -10,7 +10,7 @@ import { db, eleven, getConfig, HttpError, json, requireUser, serve } from "../_
 import { buildPatientVariables } from "../_shared/patient-prompt.ts";
 
 const StartBody = z.object({
-  scenario_id: z.uuid(),
+  scenario_id: z.guid(), // seeded ids are not RFC-variant UUIDs
   mode: z.enum(["training", "exam"]).default("training"),
 });
 const BindBody = z.object({
