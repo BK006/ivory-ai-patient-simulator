@@ -7,7 +7,9 @@
 //     5. hidden needs: "discovered" only if unlocked by trust (director log), the required question was
 //        asked, AND the patient actually said it – proven by a verified quote from a patient turn.
 //        Only discovered needs carry over to a follow-up visit.
-//     6. status → evaluated (the browser watches the session row)
+//     6. score: universal rule – main hidden need 60 pts + two secondary needs 20 pts each (max 100),
+//        counted only for discovered needs; the rubric median stays as feedback (metrics.rubric_score)
+//     7. status → evaluated (the browser watches the session row)
 //   POST { session_id, action: "audio" } → retries storing the recording of an evaluated session
 //     (ElevenLabs serves the audio only some time after the call; the report asks for it when missing).
 
@@ -323,7 +325,7 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
       .select("therapist_text, tags, trust_before, trust_after, unlocked_need_id, note, t_s, created_at")
       .eq("session_id", sessionId)
       .order("created_at"),
-    db().from("hidden_needs").select("id, ord, label, actor_hint, required_tags, missed_hint").eq("scenario_id", scenarioId).order("ord"),
+    db().from("hidden_needs").select("id, ord, label, actor_hint, required_tags, missed_hint, points").eq("scenario_id", scenarioId).order("ord"),
     db().from("sessions").select("trust, carried_need_ids").eq("id", sessionId).single(),
   ]);
   const carried = new Set<string>(sessionRow?.carried_need_ids ?? []);
@@ -334,7 +336,7 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
 
   // Needs: unlocked by trust (director log); some also require a specific tag at/after unlock;
   // and the patient must have actually disclosed it (verified quote). Carried needs stay discovered.
-  type NeedRow = { id: string; ord: number; label: string; actor_hint: string; required_tags: string[]; missed_hint: string };
+  type NeedRow = { id: string; ord: number; label: string; actor_hint: string; required_tags: string[]; missed_hint: string; points: number };
   const needRows = (needs ?? []) as NeedRow[];
   const candidates = needRows.filter((n) => {
     if (carried.has(n.id)) return false;
@@ -354,6 +356,7 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
     return {
       id: n.id,
       label: n.label,
+      points: n.points,
       discovered: fromPrevious || Boolean(disclosed),
       from_previous: fromPrevious,
       unlocked: unlockIdx >= 0,
@@ -468,14 +471,17 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
   }
 
   const avg = weightSum ? weighted / weightSum : 1;
+  const rubricScore = Math.round(((avg - 1) / 3) * 100);
+  const needsScore = Math.min(100, needsReport.filter((n) => n.discovered).reduce((sum, n) => sum + n.points, 0));
+  const scoredByNeeds = needsReport.some((n) => n.points > 0);
   const { error } = await db()
     .from("sessions")
     .update({
       status: "evaluated",
-      overall_score: Math.round(((avg - 1) / 3) * 100),
+      overall_score: scoredByNeeds ? needsScore : rubricScore,
       summary: runs[0].summary,
       audio_path: await audioPromise,
-      metrics: { ...metrics, needs: needsReport, eval_runs: runs.length, rejected_quotes: rejectedQuotes },
+      metrics: { ...metrics, needs: needsReport, rubric_score: rubricScore, eval_runs: runs.length, rejected_quotes: rejectedQuotes },
     })
     .eq("id", sessionId);
   if (error) throw error;

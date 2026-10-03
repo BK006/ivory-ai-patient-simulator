@@ -120,8 +120,8 @@ export default function ReportPage({ params }: { params: Promise<{ sessionId: st
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-          <KpiCard value={s.overall_score ?? 0} total={100} label="Wynik" hint={`próg zaliczenia 50 · ${(s.overall_score ?? 0) >= 50 ? "zaliczone" : "niezaliczone"}`} />
-          <KpiCard value={v.needsFound} total={v.metrics.needs.length} label="Odkryte potrzeby" hint="ukryte potrzeby, do których pacjent się przyznał" />
+          <KpiCard value={s.overall_score ?? 0} total={100} label="Wynik" hint={`główna potrzeba 60 pkt + 2 × 20 pkt · ${v.mainFound ? "główna potrzeba odkryta" : "główna potrzeba nieodkryta"}`} />
+          <KpiCard value={v.needsFound} total={v.scoredNeeds.length} label="Odkryte potrzeby" hint={v.metrics.rubric_score != null ? `jakość rozmowy wg rubryki: ${v.metrics.rubric_score}/100` : "ukryte potrzeby, do których pacjent się przyznał"} />
           <KpiCard value={v.metrics.trust_end} total={100} label="Zaufanie na koniec" hint={`start ${v.metrics.trust_start} · najniżej ${v.metrics.trust_min}`} />
         </div>
 
@@ -232,7 +232,10 @@ function buildView(r: Report) {
     .map((n) => ({ t: n.unlocked_at_s!, type: "strength", title: "Pacjent się otwiera", text: n.label, badge: "nowa potrzeba" }));
 
   const moments = [...improve, ...strengths, ...openings].sort((a, b) => a.t - b.t);
-  const needsFound = metrics.needs.filter((n) => n.discovered).length;
+  // Scored needs: one main (60 pts) + two secondary (20 pts). Old reports without points count all.
+  const scoredNeeds = metrics.needs.some((n) => n.points != null) ? metrics.needs.filter((n) => (n.points ?? 0) > 0) : metrics.needs;
+  const needsFound = scoredNeeds.filter((n) => n.discovered).length;
+  const mainFound = metrics.needs.some((n) => n.points === 60 && n.discovered);
   const trendWord = metrics.trust_end > metrics.trust_start + 5 ? "rośnie" : metrics.trust_end < metrics.trust_start - 5 ? "spada" : "bez zmian";
 
   const missed = metrics.needs.filter((n) => !n.discovered).map((n) => n.missed_hint);
@@ -243,9 +246,11 @@ function buildView(r: Report) {
     duration,
     moments,
     needsFound,
+    scoredNeeds,
+    mainFound,
     mood: `Zaufanie pacjenta · ${trendWord}`,
     headline: s.summary ?? "Raport z sesji",
-    summary: `Zaufanie pacjenta: ${metrics.trust_start} na starcie, ${metrics.trust_end} na koniec (najwyżej ${metrics.trust_max}). Odkryte ukryte potrzeby: ${needsFound} z ${metrics.needs.length}.`,
+    summary: `Zaufanie pacjenta: ${metrics.trust_start} na starcie, ${metrics.trust_end} na koniec (najwyżej ${metrics.trust_max}). Odkryte ukryte potrzeby: ${needsFound} z ${scoredNeeds.length}.`,
     trustChart: [
       { label: "0:00", value: metrics.trust_start },
       ...metrics.trust_timeline.map((p) => ({

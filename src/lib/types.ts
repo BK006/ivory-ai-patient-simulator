@@ -51,6 +51,8 @@ export type TrustPoint = { t_s: number | null; trust: number; delta: number; tag
 export type NeedReport = {
   id: string;
   label: string;
+  /** 60 = main need, 20 = secondary, 0 = gated topic without points (risk signal). */
+  points?: number;
   discovered: boolean;
   from_previous?: boolean;
   unlocked?: boolean;
@@ -81,6 +83,7 @@ export type SessionMetrics = {
   trust_max: number;
   trust_timeline: TrustPoint[];
   needs: NeedReport[];
+  rubric_score?: number;
   eval_runs: number;
   rejected_quotes: number;
 };

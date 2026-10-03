@@ -231,20 +231,25 @@ export function NextSteps({ items }: { items: string[] }) {
   );
 }
 
-export function NeedsList({ needs }: { needs: { id: string; label: string; discovered: boolean; from_previous?: boolean; unlocked?: boolean; quote?: string | null; unlocked_at_s: number | null; missed_hint: string }[] }) {
-  const found = needs.filter((n) => n.discovered).length;
+export function NeedsList({ needs }: { needs: { id: string; label: string; points?: number; discovered: boolean; from_previous?: boolean; unlocked?: boolean; quote?: string | null; unlocked_at_s: number | null; missed_hint: string }[] }) {
+  const scored = needs.some((n) => n.points != null) ? needs.filter((n) => (n.points ?? 0) > 0) : needs;
+  const found = scored.filter((n) => n.discovered).length;
+  // Main need first, then secondary, then the unscored risk signal.
+  const ordered = [...needs].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+  const tag = (p?: number) => (p === 60 ? "Główna potrzeba · 60 pkt" : p === 20 ? "Potrzeba poboczna · 20 pkt" : p === 0 ? "Sygnał ryzyka · ocena w rubryce" : null);
   return (
     <div style={{ display: "grid", gap: 12, padding: 24, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-l)" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <span style={{ font: "var(--type-h4)", letterSpacing: "var(--tracking-heading)" }}>Ukryte potrzeby</span>
-        <span style={{ font: "var(--type-body-s)", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{found}/{needs.length}</span>
+        <span style={{ font: "var(--type-body-s)", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{found}/{scored.length}</span>
       </div>
-      {needs.map((n) => (
+      {ordered.map((n) => (
         <div key={n.id} style={{ display: "grid", gridTemplateColumns: "20px minmax(0,1fr)", gap: 10, paddingTop: 12, borderTop: "1px solid var(--line-subtle)", opacity: n.discovered ? 1 : 0.85 }}>
           <span style={{ width: 20, height: 20, borderRadius: 10, display: "grid", placeItems: "center", background: n.discovered ? "var(--mint-100)" : "var(--surface-sunken)", color: n.discovered ? "var(--accent-text)" : "var(--text-tertiary)", font: "var(--type-caption)" }}>
             {n.discovered ? "✓" : "–"}
           </span>
           <div style={{ display: "grid", gap: 4 }}>
+            {tag(n.points) && <span style={{ font: "var(--type-label)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: n.points === 60 ? "var(--accent-text)" : "var(--text-tertiary)" }}>{tag(n.points)}</span>}
             <span style={{ font: "var(--type-body-s)", fontWeight: 500, color: n.discovered ? "var(--text-primary)" : "var(--text-secondary)" }}>
               {n.label}{n.from_previous ? " · z poprzedniej wizyty" : n.discovered && n.unlocked_at_s != null ? ` · ${fmtTime(n.unlocked_at_s)}` : ""}
             </span>
@@ -254,7 +259,7 @@ export function NeedsList({ needs }: { needs: { id: string; label: string; disco
           </div>
         </div>
       ))}
-      <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Odkryta = pacjent ją odblokował (log stanu) i faktycznie o niej powiedział (cytat zweryfikowany w transkrypcie). Na kolejną wizytę przechodzą tylko odkryte.</span>
+      <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Odkryta = pacjent ją odblokował (log stanu) i faktycznie o niej powiedział (cytat zweryfikowany w transkrypcie). Wynik: główna potrzeba 60 pkt, każda poboczna 20 pkt. Na kolejną wizytę przechodzą tylko odkryte.</span>
     </div>
   );
 }
