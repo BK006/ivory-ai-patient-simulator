@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Shuffle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
-import { ClientBrief, LiveCaption, TrustMeter, VoiceControls, VoiceVisualizer, type BriefData, type Speaker } from "@/components/ivory/session";
+import { ClientBrief, Composer, LiveCaption, TrustMeter, VoiceControls, VoiceVisualizer, type BriefData, type Speaker } from "@/components/ivory/session";
 import { Badge, Button, Dialog, PageHead, SegmentedTabs } from "@/components/ivory/ui";
 import { usePatientSession } from "@/hooks/usePatientSession";
 import { fmtDate, listScenarios, loadPreviousVisit, type ScenarioCard } from "@/lib/queries";
@@ -195,6 +195,7 @@ function LiveSession({ session: s, brief, training }: { session: ReturnType<type
           <div style={{ minHeight: 84, display: "grid", placeItems: "start center" }}>
             {captions && last && <LiveCaption key={`${s.transcript.length}-${last.role}`} speaker={last.role === "therapist" ? "you" : "client"} name={first} text={last.text} />}
           </div>
+          <Composer onSend={s.sendText} disabled={s.phase !== "live"} />
         </div>
         <div style={{ paddingBottom: 8 }}>
           <VoiceControls muted={s.isMuted} onMute={() => s.setMuted(!s.isMuted)} captions={captions} onCaptions={() => setCaptions((x) => !x)} onEnd={() => setConfirmEnd(true)} />

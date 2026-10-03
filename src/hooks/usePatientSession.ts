@@ -27,6 +27,8 @@ export function usePatientSession() {
   const lastAgentResponseId = useRef<string | undefined>(undefined);
   const directorQueue = useRef<Promise<void>>(Promise.resolve());
   const finishing = useRef(false);
+  /** Last typed message – the server may echo it back as a user transcript; don't count it twice. */
+  const lastTyped = useRef<{ text: string; at: number } | null>(null);
 
   const elapsed = () => (startedAt.current ? (Date.now() - startedAt.current) / 1000 : 0);
 
@@ -55,6 +57,11 @@ export function usePatientSession() {
           return [...lines, { role: "patient", text, t_s }];
         });
         lastAgentResponseId.current = msg.response_id;
+        return;
+      }
+      const typed = lastTyped.current;
+      if (typed && typed.text === text && Date.now() - typed.at < 15000) {
+        lastTyped.current = null;
         return;
       }
       setTranscript((lines) => [...lines, { role: "therapist", text, t_s }]);
@@ -151,6 +158,21 @@ export function usePatientSession() {
     return id;
   }, [conversation]);
 
+  /** Typed alternative to speaking: goes to the patient and through the director like a voice turn. */
+  const sendText = useCallback(
+    (raw: string) => {
+      const text = raw.trim();
+      if (!text || phase !== "live") return;
+      const t_s = elapsed();
+      lastTyped.current = { text, at: Date.now() };
+      conversation.sendUserMessage(text);
+      setTranscript((lines) => [...lines, { role: "therapist", text, t_s }]);
+      enqueueDirector(text, lastPatientText.current, t_s);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversation, phase],
+  );
+
   return {
     phase,
     error,
@@ -166,5 +188,6 @@ export function usePatientSession() {
     getInputVolume: conversation.getInputVolume,
     start,
     finish,
+    sendText,
   };
 }

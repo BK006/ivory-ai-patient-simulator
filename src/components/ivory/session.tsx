@@ -222,3 +222,28 @@ export function TrustMeter({ trust, delta, pulse }: { trust: number; delta: numb
     </div>
   );
 }
+
+/** Ivory composer: type instead of speaking (the patient still answers by voice). */
+export function Composer({ onSend, disabled, placeholder = "Napisz do pacjenta zamiast mówić…" }: { onSend: (text: string) => void; disabled?: boolean; placeholder?: string }) {
+  const [value, setValue] = useState("");
+  const [focus, setFocus] = useState(false);
+  const can = !disabled && value.trim().length > 0;
+  const send = () => {
+    if (!can) return;
+    onSend(value);
+    setValue("");
+  };
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, padding: 6, paddingLeft: 18, width: "min(640px, 100%)", background: "var(--surface-card)", borderRadius: "var(--radius-xl)", border: `1px solid ${focus ? "var(--graphite-900)" : "var(--line-strong)"}`, transition: "border-color var(--dur-fast) var(--ease-out)" }}>
+      <textarea rows={1} value={value} disabled={disabled} placeholder={placeholder}
+        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+        style={{ flex: 1, border: 0, outline: "none", resize: "none", background: "transparent", font: "var(--type-body)", color: "var(--text-primary)", padding: "10px 0", maxHeight: 120 }} />
+      <button aria-label="Wyślij" disabled={!can} onClick={send}
+        style={{ width: 40, height: 40, borderRadius: 20, border: 0, flexShrink: 0, display: "grid", placeItems: "center", cursor: can ? "pointer" : "default", background: can ? "var(--graphite-900)" : "var(--ivory-300)", transition: "background var(--dur-fast) var(--ease-out)" }}>
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="var(--ivory-50)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+    </div>
+  );
+}
