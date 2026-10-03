@@ -19,8 +19,6 @@ Ivory is a training simulator: a psychologist talks to an AI patient by voice (o
 
 Verifiability and control: every quote must appear in the transcript, or it is discarded. Each need is scored 3 times independently (median), and a need counts as discovered only with a verified quote from the patient. Metrics and trust are computed in code, not by the model's opinion. The scoring rule is the same for every patient.
 
-Responsible AI: communication training, not therapy or diagnosis; the patient never gives self-harm methods (prompt rule + an independent platform guardrail); personas avoid stereotypes.
-
 ## Challenges
 OPEN TASK: ARTIFICIAL INTELLIGENCE
 
