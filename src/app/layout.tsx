@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "Trening trudnych rozmów dla psychologów: rozmowa głosowa z symulowanym pacjentem AI i weryfikowalna ocena.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pl" className={`${geist.variable} ${geistMono.variable}`}>
       <body>

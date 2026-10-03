@@ -23,7 +23,7 @@ export function ensureUser(): Promise<string> {
 }
 
 /** Calls an Edge Function with the user's access token; throws with the Polish error message. */
-export async function callFn<T>(name: string, body: unknown): Promise<T> {
+export async function callFn<T>(name: string, body: Record<string, unknown>): Promise<T> {
   await ensureUser();
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
