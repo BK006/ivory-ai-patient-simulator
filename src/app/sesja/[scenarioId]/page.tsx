@@ -66,40 +66,47 @@ function SessionFlow({ scenarioId }: { scenarioId: string }) {
       if (others.length) router.replace(`/sesja/${others[Math.floor(Math.random() * others.length)].id}`);
     };
     return (
-      <div style={{ display: "grid", gap: 32, maxWidth: 760 }}>
+      <div style={{ display: "grid", gap: 24 }}>
         <Link href="/moduly" style={{ justifySelf: "start", display: "inline-flex", alignItems: "center", gap: 6, font: "var(--type-body-s)", color: "var(--text-secondary)" }}>
           <ArrowLeft size={16} strokeWidth={1.5} />Moduły
         </Link>
         <PageHead eyebrow={`Moduł · ${scenario.module}`} title="Twój pacjent" />
-        <ClientBrief {...brief} />
-        <div style={{ display: "grid", gap: 16, padding: 24, background: "var(--surface-raised)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-l)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div style={{ display: "grid", gap: 4 }}>
-              <span style={{ font: "var(--type-body)", fontWeight: 500 }}>Tryb sesji</span>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 24, alignItems: "start" }}>
+          <div style={{ gridColumn: "span 2", minWidth: 0 }} className="brief-main">
+            <ClientBrief {...brief} />
+          </div>
+          <aside style={{ position: "sticky", top: 88, display: "grid", gap: 20, padding: 24, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-xl)" }}>
+            <div style={{ display: "grid", gap: 12 }}>
+              <span style={{ font: "var(--type-label)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: "var(--text-tertiary)" }}>Tryb sesji</span>
+              <SegmentedTabs items={[...MODES]} value={mode} onChange={setMode} />
               <span style={{ font: "var(--type-body-s)", color: "var(--text-secondary)" }}>
                 {mode === "Trening" ? "Widzisz na żywo, jak zmienia się zaufanie pacjenta." : "Wskaźnik zaufania jest ukryty – zobaczysz go dopiero w raporcie."}
               </span>
             </div>
-            <SegmentedTabs items={[...MODES]} value={mode} onChange={setMode} />
-          </div>
-          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, font: "var(--type-body-s)", color: "var(--text-secondary)", cursor: "pointer" }}>
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3, accentColor: "var(--graphite-900)" }} />
-            Zgadzam się na nagranie rozmowy na potrzeby raportu. Nagranie i transkrypt są przechowywane 30 dni i możesz je usunąć w każdej chwili. Analizujemy treść wypowiedzi, nie emocje w głosie.
-          </label>
+            <div style={{ display: "grid", gap: 4, paddingTop: 16, borderTop: "1px solid var(--line-subtle)", font: "var(--type-caption)", color: "var(--text-tertiary)" }}>
+              <span>Rozmowa głosowa · ok. {scenario.est_minutes} min</span>
+              <span>Powiedz „STOP”, by wyjść z roli</span>
+            </div>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, font: "var(--type-caption)", color: "var(--text-secondary)", cursor: "pointer" }}>
+              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 2, accentColor: "var(--graphite-900)" }} />
+              Zgadzam się na nagranie rozmowy na potrzeby raportu. Nagranie i transkrypt są przechowywane 30 dni i możesz je usunąć w każdej chwili. Analizujemy treść wypowiedzi, nie emocje w głosie.
+            </label>
+            {s.error && <span style={{ font: "var(--type-body-s)", color: "var(--negative-text)" }}>{s.error}</span>}
+            <div style={{ display: "grid", gap: 8 }}>
+              <Button size="l" fullWidth disabled={!consent} iconRight={<ArrowRight size={18} strokeWidth={1.5} />}
+                onClick={() => s.start(scenario.id, (mode === "Trening" ? "training" : "exam") as SessionMode)}>
+                Rozpocznij symulację
+              </Button>
+              <Button variant="ghost" fullWidth iconLeft={<Shuffle size={16} strokeWidth={1.5} />} disabled={pool.length < 2} onClick={reroll}>
+                Losuj innego pacjenta
+              </Button>
+              <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)", textAlign: "center" }}>
+                {pool.length} {pool.length === 1 ? "pacjent" : "pacjentów"} w puli
+              </span>
+            </div>
+          </aside>
         </div>
-        {s.error && <span style={{ font: "var(--type-body-s)", color: "var(--negative-text)" }}>{s.error}</span>}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <Button size="l" disabled={!consent} iconRight={<ArrowRight size={18} strokeWidth={1.5} />}
-            onClick={() => s.start(scenario.id, (mode === "Trening" ? "training" : "exam") as SessionMode)}>
-            Rozpocznij symulację
-          </Button>
-          <Button size="l" variant="secondary" iconLeft={<Shuffle size={18} strokeWidth={1.5} />} disabled={pool.length < 2} onClick={reroll}>
-            Losuj innego pacjenta
-          </Button>
-          <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)", marginLeft: 8 }}>
-            {pool.length} {pool.length === 1 ? "pacjent" : pool.length < 5 ? "pacjentów" : "pacjentów"} w puli
-          </span>
-        </div>
+        <style>{`@media (max-width: 760px) { .brief-main { grid-column: auto !important; } }`}</style>
       </div>
     );
   }
