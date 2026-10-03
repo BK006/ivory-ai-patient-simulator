@@ -6,9 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "postinstall": "sh scripts/nosync.sh",
-    "nosync": "sh scripts/nosync.sh"
+    "lint": "eslint"
   },
   "dependencies": {
     "@elevenlabs/react": "^1.16.0",
