@@ -30,7 +30,8 @@ Płeć postaci: {{plec_postaci}}. Konsekwentnie używaj form gramatycznych zgodn
 {{poprzednia_wizyta}}
 
 # ROZMÓWCA
-Rozmówca to psycholog lub student psychologii, który na tobie ćwiczy rozmowę. Zwracasz się do niego per Pan/Pani; dopóki nie wiesz, kim jest, unikaj form zależnych od jego płci. Nie jesteś jego asystentem — nie pomagasz mu, nie chwalisz go i nie oceniasz.
+Rozmówca to psycholog lub student psychologii, który na tobie ćwiczy rozmowę. Nie jesteś jego asystentem — nie pomagasz mu, nie chwalisz go i nie oceniasz.
+{{rozmowca}}
 
 # TWÓJ CEL W TEJ ROZMOWIE (jako postać)
 {{cel_postaci}}
@@ -85,6 +86,17 @@ const VISIT_INSTRUCTIONS: Record<VisitKind, string> = {
     "Kolejna wizyta u tego samego psychologa. Znacie się z poprzedniego spotkania (zapis w sekcji POPRZEDNIA WIZYTA). Pamiętasz, co powiedziałeś/aś i co powiedział psycholog — odnoś się do tego naturalnie, bez streszczania. To, co już ujawniłeś/aś, jest wiadome; rzeczy przemilczane nadal trzeba z ciebie wydobyć. To symulacja treningowa dla psychologów.",
 };
 
+export type Psychologist = { name?: string | null; gender?: "k" | "m" | null };
+
+/** How the patient addresses the psychologist (name + Pan/Pani), from the account settings. */
+function describePsychologist(p?: Psychologist): string {
+  if (!p?.name || !p.gender) {
+    return "Nie znasz imienia ani płci psychologa. Zwracasz się per Pan/Pani i unikasz form zależnych od płci, dopóki się nie przedstawi.";
+  }
+  const woman = p.gender === "k";
+  return `Psycholog ma na imię ${p.name} (${woman ? "kobieta" : "mężczyzna"}). Zwracasz się per „${woman ? "Pani" : "Pan"}”, a od czasu do czasu po imieniu w poprawnym polskim wołaczu (np. Anna → „Pani Anno”, Michał → „Panie Michale”, Kuba → „Panie Kubo”) — nie w każdym zdaniu. Konsekwentnie używasz form zgodnych z płcią psychologa (${woman ? "powiedziała Pani, pytała Pani" : "powiedział Pan, pytał Pan"}).`;
+}
+
 const NO_PREVIOUS_VISIT = "To wasze pierwsze spotkanie. Nie było wcześniejszych rozmów.";
 
 // Single intensity level for the MVP; a persona can override any of these keys.
@@ -93,7 +105,7 @@ const INTENSITY: Record<string, string> = { max_zdan: "3", nieufnosc: "6", otwar
 /** All variables the agent prompt expects. Missing persona keys fall back to neutral defaults. */
 export function buildPatientVariables(
   personaVars: Record<string, string>,
-  visit: { kind: VisitKind; previousVisit?: string },
+  visit: { kind: VisitKind; previousVisit?: string; psychologist?: Psychologist },
 ): Record<string, string> {
   const { pierwsza_wypowiedz_kolejna, ...persona } = personaVars;
   const followup = visit.kind === "followup";
@@ -115,6 +127,7 @@ export function buildPatientVariables(
     ...(followup ? { pierwsza_wypowiedz: pierwsza_wypowiedz_kolejna || "Dzień dobry. Jestem znowu." } : {}),
     instrukcja_modulu: VISIT_INSTRUCTIONS[visit.kind],
     poprzednia_wizyta: followup && visit.previousVisit ? visit.previousVisit : NO_PREVIOUS_VISIT,
+    rozmowca: describePsychologist(visit.psychologist),
     // Shared for every persona – never taken from the DB.
     zasady_ujawniania: SHARED_DISCLOSURE_RULES,
     guardrails: SHARED_GUARDRAILS,

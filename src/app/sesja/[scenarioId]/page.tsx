@@ -8,6 +8,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import { ClientBrief, Composer, LiveCaption, TrustMeter, VoiceControls, VoiceVisualizer, type BriefData, type Speaker } from "@/components/ivory/session";
 import { Badge, Button, Dialog, PageHead, SegmentedTabs } from "@/components/ivory/ui";
 import { usePatientSession } from "@/hooks/usePatientSession";
+import { loadProfile } from "@/lib/profile";
 import { fmtDate, listScenarios, loadPreviousVisit, type ScenarioCard } from "@/lib/queries";
 import type { SessionMode } from "@/lib/types";
 
@@ -61,10 +62,12 @@ function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; pr
   const [prev, setPrev] = useState<PreviousVisit | null | undefined>(previousSessionId ? undefined : null);
   const [mode, setMode] = useState<(typeof MODES)[number]>("Trening");
   const [consent, setConsent] = useState(true);
+  const [myName, setMyName] = useState<string | null | undefined>(undefined);
   const s = usePatientSession();
 
   useEffect(() => {
     listScenarios().then(setAll).catch(console.error);
+    loadProfile().then((p) => setMyName(p.display_name)).catch(() => setMyName(null));
   }, []);
 
   useEffect(() => {
@@ -119,6 +122,12 @@ function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; pr
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 2, accentColor: "var(--graphite-900)" }} />
               Zgadzam się na nagranie rozmowy na potrzeby raportu. Nagranie i transkrypt są przechowywane 30 dni i możesz je usunąć w każdej chwili. Analizujemy treść wypowiedzi, nie emocje w głosie.
             </label>
+            {myName === null && (
+              <Link href="/ustawienia" style={{ padding: "10px 12px", borderRadius: "var(--radius-s)", background: "#FBF1E4", font: "var(--type-caption)", color: "#8A5A2B" }}>
+                Pacjent nie wie, jak się do Ciebie zwracać. Ustaw swoje imię w Ustawieniach →
+              </Link>
+            )}
+            {myName && <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Pacjent będzie się zwracał do Ciebie: {myName}.</span>}
             {s.error && <span style={{ font: "var(--type-body-s)", color: "var(--negative-text)" }}>{s.error}</span>}
             <div style={{ display: "grid", gap: 8 }}>
               <Button size="l" fullWidth disabled={!consent} iconRight={<ArrowRight size={18} strokeWidth={1.5} />}

@@ -111,9 +111,11 @@ serve(async (req) => {
     .single();
   if (error) throw error;
 
+  const { data: profile } = await db().from("profiles").select("display_name, gender").eq("id", user.id).maybeSingle();
   const vars = buildPatientVariables(persona.vars as Record<string, string>, {
     kind: followup ? "followup" : "first",
     previousVisit: followup?.text,
+    psychologist: { name: profile?.display_name, gender: profile?.gender },
   });
   return json({
     session_id: session.id,
