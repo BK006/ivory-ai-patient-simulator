@@ -216,7 +216,7 @@ Role zakładają 2–4 osoby: **F** = frontend/design, **V** = voice/ElevenLabs,
 4. Raport: cytaty, wykres zaufania, coaching.
 5. Architektura: aktor, reżyser, oceniający.
 6. Jak weryfikować AI: zweryfikowane cytaty, mediana z 3 ocen, log reżysera, nadpisanie oceny przez superwizora.
-7. Odpowiedzialne AI: guardrails, brak metod, brak stereotypów, **brak analizy emocji z głosu (AI Act art. 5)**, RODO i retencja.
+7. Odpowiedzialne AI: guardrails, brak metod, brak stereotypów, RODO i retencja.
 8. Dla kogo i dlaczego teraz: uczelnie, ośrodki, linie kryzysowe; nowa ustawa o zawodzie psychologa.
 9. Ograniczenia i walidacja: pilotaż z uczelnią, rubryka do weryfikacji przez ekspertów.
 10. Zespół + użyte narzędzia i AI (ujawnienie).

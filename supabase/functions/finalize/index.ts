@@ -1,20 +1,23 @@
 // Edge Function: end a session and evaluate it.
 //   POST { session_id } → 202; work continues in the background (EdgeRuntime.waitUntil):
 //     1. transcript (+ audio) from ElevenLabs → turns, Storage
-//     2. deterministic metrics from the director log (R:Q, % open questions, trust curve, needs)
+//     2. post-call coding: every psychologist turn is tagged (OpenAI, one call over the transcript);
+//        trust is computed from the tags deterministically (scenario tag_weights, ±15 per turn) and
+//        stored in director_events – the trust curve and metrics (R:Q, % open questions) come from it
 //     3. rubric evaluation ×3 in parallel (OpenAI, structured output) → median + spread per criterion
 //     4. quote verification: every quote must literally appear in the transcript, otherwise dropped
-//     5. hidden needs: "discovered" only if unlocked by trust (director log), the required question was
-//        asked, AND the patient actually said it – proven by a verified quote from a patient turn.
-//        Only discovered needs carry over to a follow-up visit.
-//     6. score: universal rule – main hidden need 60 pts + two secondary needs 20 pts each (max 100),
-//        counted only for discovered needs; the rubric median stays as feedback (metrics.rubric_score)
+//     5. hidden needs: how deeply each one was explored, 0–100 % (3 runs, median). Above 0 % needs a
+//        verified quote; 50 %+ (= discovered, carries over to a follow-up) needs a quote from the PATIENT.
+//     6. score: universal rule – main need up to 60 pts + two secondary needs up to 20 pts each,
+//        proportional to the depth (e.g. 65 % of a secondary need = 13/20); the rubric median stays
+//        as feedback (metrics.rubric_score)
 //     7. status → evaluated (the browser watches the session row)
 //   POST { session_id, action: "audio" } → retries storing the recording of an evaluated session
 //     (ElevenLabs serves the audio only some time after the call; the report asks for it when missing).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "npm:zod@4";
+import { MAX_DELTA_PER_TURN, TAG_DEFINITIONS, TAGS } from "../_shared/coding.ts";
 import { ai, db, DIRECTOR_MODEL, eleven, EVAL_MODEL, HttpError, json, normalize, requireUser, serve } from "../_shared/common.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
@@ -241,7 +244,84 @@ function locateQuote(turns: Turn[], claimedIdx: number, quote: string): number |
   return turns.find((t) => normalize(t.text).includes(q))?.idx ?? null;
 }
 
-const DISCLOSURE_SCHEMA = {
+const CODING_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["turns"],
+  properties: {
+    turns: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["turn_idx", "tags", "note"],
+        properties: {
+          turn_idx: { type: "integer" },
+          tags: { type: "array", items: { type: "string", enum: TAGS } },
+          note: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
+const isSpeech = (text: string) => /\p{L}/u.test(text);
+
+/** Tags every psychologist turn of the transcript in one call. */
+async function codeTherapistTurns(turns: Turn[]): Promise<Map<number, { tags: string[]; note: string }>> {
+  const result = new Map<number, { tags: string[]; note: string }>();
+  if (!turns.some((t) => t.speaker === "therapist" && isSpeech(t.text))) return result;
+  const response = await ai().responses.create({
+    model: DIRECTOR_MODEL,
+    reasoning: { effort: "low" },
+    input: [
+      {
+        role: "system",
+        content: `Kodujesz wypowiedzi psychologa w rozmowie treningowej z pacjentem (wzorowane na MITI 4.2). Dla KAŻDEJ tury PSYCHOLOGA z transkryptu zwróć turn_idx, wszystkie pasujące tagi (z uwzględnieniem tego, co pacjent powiedział tuż przed) i note – jedno krótkie zdanie po polsku, co zrobił psycholog.\n\n${TAG_DEFINITIONS}`,
+      },
+      { role: "user", content: transcriptText(turns) },
+    ],
+    text: { format: { type: "json_schema", name: "therapist_coding", strict: true, schema: CODING_SCHEMA } },
+  });
+  const parsed = JSON.parse(response.output_text) as { turns: { turn_idx: number; tags: string[]; note: string }[] };
+  for (const t of parsed.turns) result.set(t.turn_idx, { tags: [...new Set(t.tags)], note: t.note });
+  return result;
+}
+
+type NeedRow = { id: string; ord: number; label: string; actor_hint: string; required_tags: string[]; missed_hint: string; points: number; unlock_threshold: number };
+
+/** Replays the conversation: trust after every psychologist turn and when each need became available. */
+function trustLog(turns: Turn[], coded: Map<number, { tags: string[]; note: string }>, weights: Record<string, number>, trustStart: number, needs: NeedRow[], carried: Set<string>) {
+  const unlocked = new Set(carried);
+  let trust = trustStart;
+  const base = Date.now();
+  return turns
+    .filter((t) => t.speaker === "therapist" && isSpeech(t.text))
+    .map((t, i): DirectorEvent & { turn_idx: number } => {
+      const c = coded.get(t.idx);
+      const tags = c?.tags.length ? c.tags : ["other"];
+      const raw = tags.reduce((sum, tag) => sum + (weights[tag] ?? 0), 0);
+      const delta = Math.max(-MAX_DELTA_PER_TURN, Math.min(MAX_DELTA_PER_TURN, raw));
+      const before = trust;
+      trust = Math.max(0, Math.min(100, trust + delta));
+      // At most one need per turn becomes available, in disclosure order.
+      const next = needs.find((n) => !unlocked.has(n.id) && trust >= n.unlock_threshold);
+      if (next) unlocked.add(next.id);
+      return {
+        turn_idx: t.idx,
+        therapist_text: t.text,
+        tags,
+        trust_before: before,
+        trust_after: trust,
+        unlocked_need_id: next?.id ?? null,
+        note: c?.note ?? null,
+        t_s: t.t_start_s,
+        created_at: new Date(base + i).toISOString(),
+      };
+    });
+}
+
+const NEEDS_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["needs"],
@@ -251,54 +331,75 @@ const DISCLOSURE_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "disclosed", "turn_idx", "quote"],
+        required: ["id", "depth", "turn_idx", "quote", "reason"],
         properties: {
           id: { type: "string" },
-          disclosed: { type: "boolean" },
+          depth: { type: "integer" },
           turn_idx: { type: "integer" },
           quote: { type: "string" },
+          reason: { type: "string" },
         },
       },
     },
   },
 };
 
+type NeedAssessment = { depth: number; quote: string | null; t_s: number | null; reason: string };
+
 /**
- * For needs the patient was allowed to reveal, checks whether the patient actually said it.
- * Returns only needs with a quote that literally appears in a PATIENT turn.
+ * How deeply each hidden need was explored, 0–100 (median of 3 runs). Verified in code:
+ * above 0 requires a quote that literally appears in the transcript; 50+ requires it from the patient.
  */
-async function verifyDisclosures(
-  candidates: { id: string; label: string; actor_hint: string }[],
-  turns: Turn[],
-): Promise<Map<string, { quote: string; t_s: number | null }>> {
-  const result = new Map<string, { quote: string; t_s: number | null }>();
+async function assessNeeds(needs: NeedRow[], turns: Turn[]): Promise<Map<string, NeedAssessment>> {
+  const result = new Map<string, NeedAssessment>();
+  if (!needs.length || !turns.length) return result;
+  const prompt = `Oceniasz, jak głęboko psycholog wybadał ukryte potrzeby pacjenta w rozmowie treningowej. Dla każdej potrzeby zwróć depth 0–100:
+- 0: temat w ogóle się nie pojawił.
+- 1–30: psycholog zbliżył się do tematu albo pacjent rzucił aluzję, ale nikt jej nie podjął.
+- 31–49: temat padł, ale tylko powierzchownie – pacjent nie powiedział o nim wprost.
+- 50–70: pacjent wprost o tym powiedział, psycholog częściowo dopytał.
+- 71–100: pacjent wprost o tym powiedział, a psycholog to pogłębił: dopytał, odzwierciedlił emocję, zrozumiał znaczenie dla pacjenta.
+turn_idx i quote: najważniejszy dowód – DOSŁOWNY cytat (3–25 słów) z jednej tury; przy depth ≥ 50 musi to być tura PACJENTA. Przy depth 0: turn_idx=-1, quote="". reason: jedno zdanie po polsku, czego zabrakło do 100 albo co zadecydowało.`;
+  const settled = await Promise.allSettled(
+    Array.from({ length: RUNS }, () =>
+      ai().responses.create({
+        model: DIRECTOR_MODEL,
+        reasoning: { effort: "medium" },
+        input: [
+          { role: "system", content: prompt },
+          {
+            role: "user",
+            content: `Potrzeby:\n${needs.map((n) => `- id=${n.id}: ${n.label} (${n.actor_hint})`).join("\n")}\n\nTranskrypt:\n${transcriptText(turns)}`,
+          },
+        ],
+        text: { format: { type: "json_schema", name: "need_depth", strict: true, schema: NEEDS_SCHEMA } },
+      }),
+    ),
+  );
+  const runs = settled.flatMap((s) =>
+    s.status === "fulfilled" ? [(JSON.parse(s.value.output_text) as { needs: { id: string; depth: number; turn_idx: number; quote: string; reason: string }[] }).needs] : [],
+  );
   const patientTurns = turns.filter((t) => t.speaker === "patient");
-  if (!candidates.length || !patientTurns.length) return result;
-  const response = await ai().responses.create({
-    model: DIRECTOR_MODEL,
-    reasoning: { effort: "low" },
-    input: [
-      {
-        role: "system",
-        content: `Sprawdzasz, czy pacjent w rozmowie treningowej FAKTYCZNIE ujawnił podane tematy. Temat jest ujawniony tylko wtedy, gdy pacjent wprost lub jednoznacznie o nim powiedział (sama aluzja, której psycholog nie podjął, to za mało). Dla każdego tematu zwróć disclosed, turn_idx tury PACJENTA i DOSŁOWNY cytat (3–25 słów) z tej tury. Jeśli temat nie został ujawniony: disclosed=false, turn_idx=-1, quote="".`,
-      },
-      {
-        role: "user",
-        content: `Tematy:\n${candidates.map((n) => `- id=${n.id}: ${n.label} (${n.actor_hint})`).join("\n")}\n\nTranskrypt:\n${turns
-          .map((t) => `[${t.idx}] ${t.speaker === "therapist" ? "PSYCHOLOG" : "PACJENT"}: ${t.text}`)
-          .join("\n")}`,
-      },
-    ],
-    text: { format: { type: "json_schema", name: "need_disclosures", strict: true, schema: DISCLOSURE_SCHEMA } },
-  });
-  const parsed = JSON.parse(response.output_text) as { needs: { id: string; disclosed: boolean; turn_idx: number; quote: string }[] };
-  for (const d of parsed.needs) {
-    if (!d.disclosed || !candidates.some((c) => c.id === d.id)) continue;
-    const idx = locateQuote(patientTurns, d.turn_idx, d.quote);
-    if (idx === null) continue; // unverifiable quote → not counted as discovered
-    result.set(d.id, { quote: d.quote, t_s: patientTurns.find((t) => t.idx === idx)?.t_start_s ?? null });
+  for (const n of needs) {
+    const verified = runs.flatMap((run) => {
+      const a = run.find((x) => x.id === n.id);
+      if (!a) return [];
+      let depth = Math.max(0, Math.min(100, Math.round(a.depth)));
+      const idx = depth > 0 ? locateQuote(turns, a.turn_idx, a.quote) : null;
+      if (idx === null) depth = 0; // unverifiable evidence → nothing counted
+      else if (depth >= 50 && locateQuote(patientTurns, a.turn_idx, a.quote) === null) depth = 40; // the patient never said it
+      return [{ depth, quote: depth > 0 ? a.quote : null, t_s: idx === null ? null : turns.find((t) => t.idx === idx)?.t_start_s ?? null, reason: a.reason }];
+    });
+    if (!verified.length) continue;
+    const med = median(verified.map((v) => v.depth));
+    const rep = verified.reduce((best, v) => (Math.abs(v.depth - med) < Math.abs(best.depth - med) ? v : best));
+    result.set(n.id, { ...rep, depth: Math.round(med) });
   }
   return result;
+}
+
+function transcriptText(turns: Turn[]): string {
+  return turns.map((t) => `[${t.idx}] ${t.speaker === "therapist" ? "PSYCHOLOG" : "PACJENT"}: ${t.text}`).join("\n");
 }
 
 function median(xs: number[]): number {
@@ -318,50 +419,48 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
     if (error) throw error;
   }
 
-  const [{ data: scenario }, { data: events }, { data: needs }, { data: sessionRow }] = await Promise.all([
-    db().from("scenarios").select("trust_start, rubric_id").eq("id", scenarioId).single(),
-    db()
-      .from("director_events")
-      .select("therapist_text, tags, trust_before, trust_after, unlocked_need_id, note, t_s, created_at")
-      .eq("session_id", sessionId)
-      .order("created_at"),
-    db().from("hidden_needs").select("id, ord, label, actor_hint, required_tags, missed_hint, points").eq("scenario_id", scenarioId).order("ord"),
+  const [{ data: scenario }, { data: needs }, { data: sessionRow }, coded] = await Promise.all([
+    db().from("scenarios").select("trust_start, rubric_id, tag_weights").eq("id", scenarioId).single(),
+    db().from("hidden_needs").select("id, ord, label, actor_hint, required_tags, missed_hint, points, unlock_threshold").eq("scenario_id", scenarioId).order("ord"),
     db().from("sessions").select("trust, carried_need_ids").eq("id", sessionId).single(),
+    codeTherapistTurns(turns),
   ]);
   const carried = new Set<string>(sessionRow?.carried_need_ids ?? []);
-  const log = (events ?? []) as DirectorEvent[];
-  // Follow-up visits start from the trust carried over from the previous visit.
-  const trustStart = log[0]?.trust_before ?? sessionRow?.trust ?? scenario!.trust_start;
+  const needRows = (needs ?? []) as NeedRow[];
+  // session.trust holds the starting trust (follow-ups start from the previous visit's trust).
+  const trustStart = sessionRow?.trust ?? scenario!.trust_start;
+  const log = trustLog(turns, coded, scenario!.tag_weights as Record<string, number>, trustStart, needRows, carried);
+  await db().from("director_events").delete().eq("session_id", sessionId);
+  if (log.length) {
+    const { error } = await db().from("director_events").insert(log.map((e) => ({ ...e, session_id: sessionId, update_text: "" })));
+    if (error) throw error;
+  }
   const metrics = computeMetrics(turns, log, trustStart);
 
-  // Needs: unlocked by trust (director log); some also require a specific tag at/after unlock;
-  // and the patient must have actually disclosed it (verified quote). Carried needs stay discovered.
-  type NeedRow = { id: string; ord: number; label: string; actor_hint: string; required_tags: string[]; missed_hint: string; points: number };
-  const needRows = (needs ?? []) as NeedRow[];
-  const candidates = needRows.filter((n) => {
-    if (carried.has(n.id)) return false;
-    const unlockIdx = log.findIndex((e) => e.unlocked_need_id === n.id);
-    return unlockIdx >= 0 &&
-      (n.required_tags.length === 0 ||
-        log.slice(unlockIdx).some((e) => n.required_tags.some((t) => e.tags.includes(t))));
-  });
-  const disclosures = await verifyDisclosures(candidates, turns).catch((err) => {
-    console.error("disclosure check failed", err);
-    return new Map<string, { quote: string; t_s: number | null }>();
+  // Needs: depth of exploration with verified quotes; some (risk) also require a specific question.
+  // Carried needs were already discovered on the previous visit and count in full.
+  const assessed = await assessNeeds(needRows.filter((n) => !carried.has(n.id)), turns).catch((err) => {
+    console.error("needs assessment failed", err);
+    return new Map<string, NeedAssessment>();
   });
   const needsReport = needRows.map((n) => {
     const unlockIdx = log.findIndex((e) => e.unlocked_need_id === n.id);
     const fromPrevious = carried.has(n.id);
-    const disclosed = disclosures.get(n.id);
+    const a = assessed.get(n.id);
+    const tagOk = n.required_tags.length === 0 || log.some((e) => n.required_tags.some((t) => e.tags.includes(t)));
+    const depth = fromPrevious ? 100 : tagOk ? a?.depth ?? 0 : Math.min(a?.depth ?? 0, 40);
     return {
       id: n.id,
       label: n.label,
       points: n.points,
-      discovered: fromPrevious || Boolean(disclosed),
+      depth,
+      earned: Math.round((n.points * depth) / 100),
+      discovered: depth >= 50,
       from_previous: fromPrevious,
-      unlocked: unlockIdx >= 0,
-      unlocked_at_s: disclosed?.t_s ?? (unlockIdx >= 0 ? log[unlockIdx].t_s : null),
-      quote: disclosed?.quote ?? null,
+      unlocked: fromPrevious || unlockIdx >= 0,
+      unlocked_at_s: a?.t_s ?? (unlockIdx >= 0 ? log[unlockIdx].t_s : null),
+      quote: a?.quote ?? null,
+      reason: fromPrevious ? null : a?.reason ?? null,
       missed_hint: n.missed_hint,
     };
   });
@@ -374,9 +473,7 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
   const criteria = (criteriaRows ?? []) as Criterion[];
   const keys = criteria.map((c) => c.key);
 
-  const transcript = turns
-    .map((t) => `[${t.idx}] ${t.speaker === "therapist" ? "PSYCHOLOG" : "PACJENT"}: ${t.text}`)
-    .join("\n");
+  const transcript = transcriptText(turns);
   const facts = JSON.stringify({ ...metrics, trust_timeline: undefined, needs: needsReport.map(({ label, discovered }) => ({ label, discovered })) });
 
   const settled = await Promise.allSettled(
@@ -472,12 +569,13 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
 
   const avg = weightSum ? weighted / weightSum : 1;
   const rubricScore = Math.round(((avg - 1) / 3) * 100);
-  const needsScore = Math.min(100, needsReport.filter((n) => n.discovered).reduce((sum, n) => sum + n.points, 0));
+  const needsScore = Math.min(100, needsReport.reduce((sum, n) => sum + n.earned, 0));
   const scoredByNeeds = needsReport.some((n) => n.points > 0);
   const { error } = await db()
     .from("sessions")
     .update({
       status: "evaluated",
+      trust: metrics.trust_end,
       overall_score: scoredByNeeds ? needsScore : rubricScore,
       summary: runs[0].summary,
       audio_path: await audioPromise,

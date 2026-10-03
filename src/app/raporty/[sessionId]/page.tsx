@@ -120,7 +120,7 @@ export default function ReportPage({ params }: { params: Promise<{ sessionId: st
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-          <KpiCard value={s.overall_score ?? 0} total={100} label="Wynik" hint={`główna potrzeba 60 pkt + 2 × 20 pkt · ${v.mainFound ? "główna potrzeba odkryta" : "główna potrzeba nieodkryta"}`} />
+          <KpiCard value={s.overall_score ?? 0} total={100} label="Wynik" hint={`główna potrzeba do 60 pkt + 2 × do 20 pkt · ${v.mainFound ? "główna potrzeba odkryta" : "główna potrzeba nieodkryta"}`} />
           <KpiCard value={v.needsFound} total={v.scoredNeeds.length} label="Odkryte potrzeby" hint={v.metrics.rubric_score != null ? `jakość rozmowy wg rubryki: ${v.metrics.rubric_score}/100` : "ukryte potrzeby, do których pacjent się przyznał"} />
           <KpiCard value={v.metrics.trust_end} total={100} label="Zaufanie na koniec" hint={`start ${v.metrics.trust_start} · najniżej ${v.metrics.trust_min}`} />
         </div>

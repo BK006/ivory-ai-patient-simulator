@@ -68,9 +68,6 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
         } />
       <main style={{ maxWidth: "var(--content-max)", margin: "0 auto", padding: "32px 32px" }}>{children}</main>
-      <footer style={{ maxWidth: "var(--content-max)", margin: "0 auto", padding: "8px 32px 40px", font: "var(--type-caption)", color: "var(--text-tertiary)" }}>
-        Trening komunikacji, nie terapia ani diagnoza. Persony i rubryka wymagają weryfikacji klinicznej przed użyciem w szkoleniu.
-      </footer>
     </div>
   );
 }

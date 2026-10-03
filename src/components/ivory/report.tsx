@@ -231,12 +231,12 @@ export function NextSteps({ items }: { items: string[] }) {
   );
 }
 
-export function NeedsList({ needs }: { needs: { id: string; label: string; points?: number; discovered: boolean; from_previous?: boolean; unlocked?: boolean; quote?: string | null; unlocked_at_s: number | null; missed_hint: string }[] }) {
+export function NeedsList({ needs }: { needs: { id: string; label: string; points?: number; depth?: number; earned?: number; reason?: string | null; discovered: boolean; from_previous?: boolean; unlocked?: boolean; quote?: string | null; unlocked_at_s: number | null; missed_hint: string }[] }) {
   const scored = needs.some((n) => n.points != null) ? needs.filter((n) => (n.points ?? 0) > 0) : needs;
   const found = scored.filter((n) => n.discovered).length;
   // Main need first, then secondary, then the unscored risk signal.
   const ordered = [...needs].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
-  const tag = (p?: number) => (p === 60 ? "Główna potrzeba · 60 pkt" : p === 20 ? "Potrzeba poboczna · 20 pkt" : p === 0 ? "Sygnał ryzyka · ocena w rubryce" : null);
+  const tag = (p?: number) => (p === 60 ? "Główna potrzeba" : p === 20 ? "Potrzeba poboczna" : p === 0 ? "Sygnał ryzyka · ocena w rubryce" : null);
   return (
     <div style={{ display: "grid", gap: 12, padding: 24, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-l)" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
@@ -249,17 +249,23 @@ export function NeedsList({ needs }: { needs: { id: string; label: string; point
             {n.discovered ? "✓" : "–"}
           </span>
           <div style={{ display: "grid", gap: 4 }}>
-            {tag(n.points) && <span style={{ font: "var(--type-label)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: n.points === 60 ? "var(--accent-text)" : "var(--text-tertiary)" }}>{tag(n.points)}</span>}
+            {tag(n.points) && (
+              <span style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ font: "var(--type-label)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: n.points === 60 ? "var(--accent-text)" : "var(--text-tertiary)" }}>{tag(n.points)}</span>
+                {!!n.points && <span style={{ font: "var(--type-body-s)", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{n.earned ?? (n.discovered ? n.points : 0)}/{n.points} pkt</span>}
+              </span>
+            )}
             <span style={{ font: "var(--type-body-s)", fontWeight: 500, color: n.discovered ? "var(--text-primary)" : "var(--text-secondary)" }}>
               {n.label}{n.from_previous ? " · z poprzedniej wizyty" : n.discovered && n.unlocked_at_s != null ? ` · ${fmtTime(n.unlocked_at_s)}` : ""}
             </span>
             {n.discovered && n.quote && <span style={{ font: "var(--type-caption)", fontStyle: "italic", color: "var(--text-secondary)" }}>„{n.quote}”</span>}
+            {n.reason && <span style={{ font: "var(--type-caption)", color: "var(--text-secondary)" }}>{n.depth != null ? `Wybadane w ${n.depth}% · ` : ""}{n.reason}</span>}
             {!n.discovered && n.unlocked && <span style={{ font: "var(--type-caption)", color: "#8A5A2B" }}>Pacjent był gotów o tym powiedzieć, ale temat nie został podjęty.</span>}
             {!n.discovered && <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Co mogło otworzyć: {n.missed_hint}</span>}
           </div>
         </div>
       ))}
-      <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Odkryta = pacjent ją odblokował (log stanu) i faktycznie o niej powiedział (cytat zweryfikowany w transkrypcie). Wynik: główna potrzeba 60 pkt, każda poboczna 20 pkt. Na kolejną wizytę przechodzą tylko odkryte.</span>
+      <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Wynik: główna potrzeba do 60 pkt, każda poboczna do 20 pkt – proporcjonalnie do tego, jak głęboko została wybadana. Odkryta = co najmniej 50% i cytat pacjenta zweryfikowany w transkrypcie; tylko takie przechodzą na kolejną wizytę.</span>
     </div>
   );
 }

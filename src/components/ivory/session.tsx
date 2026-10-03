@@ -197,33 +197,6 @@ export function LiveCaption({ speaker, name, text }: { speaker: "you" | "client"
   );
 }
 
-/** Live trust of the simulated patient (training mode). Number first, colour second. */
-export function TrustMeter({ trust, delta, pulse }: { trust: number; delta: number | null; pulse?: boolean }) {
-  const level = trust < 40 ? "Zamknięty" : trust < 65 ? "Ostrożnie się otwiera" : "Otwarty";
-  const color = trust < 40 ? "var(--stone-500)" : trust < 65 ? "var(--amber-400)" : "var(--mint-500)";
-  return (
-    <div style={{ display: "grid", gap: 12, padding: 20, background: "var(--surface-card)", border: `1px solid ${pulse ? "var(--mint-300)" : "var(--line-subtle)"}`, borderRadius: "var(--radius-xl)", transition: "border-color var(--dur-slow) var(--ease-out)" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ font: "var(--type-label)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: "var(--text-tertiary)" }}>Zaufanie pacjenta</span>
-        {delta != null && delta !== 0 && (
-          <span key={`${trust}-${delta}`} style={{ font: "var(--type-body-s)", fontWeight: 500, color: delta > 0 ? "var(--positive)" : "var(--negative-text)", animation: "ds-fade-up var(--dur-base) var(--ease-out)" }}>
-            {delta > 0 ? "+" : "−"}{Math.abs(delta)}
-          </span>
-        )}
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ font: "var(--type-numeral-l)", letterSpacing: "var(--tracking-display)", fontVariantNumeric: "tabular-nums" }}>{trust}</span>
-        <span style={{ font: "var(--type-body-s)", color: "var(--text-secondary)" }}>{level}</span>
-      </div>
-      <div style={{ height: 6, borderRadius: 3, background: "var(--score-track)", overflow: "hidden" }}>
-        <div style={{ width: `${trust}%`, height: "100%", borderRadius: 3, background: color, transition: "width var(--dur-slow) var(--ease-breath), background var(--dur-slow) var(--ease-out)" }} />
-      </div>
-      {pulse && <span style={{ font: "var(--type-caption)", color: "var(--accent-text)" }}>Pacjent jest gotów powiedzieć więcej.</span>}
-    </div>
-  );
-}
-
-/** Ivory composer: type instead of speaking (the patient still answers by voice). */
 export function Composer({ onSend, disabled, placeholder = "Napisz do pacjenta zamiast mówić…" }: { onSend: (text: string) => void; disabled?: boolean; placeholder?: string }) {
   const [value, setValue] = useState("");
   const [focus, setFocus] = useState(false);

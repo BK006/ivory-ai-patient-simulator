@@ -6,7 +6,8 @@
 // WebSocket (not WebRTC): over LiveKit the conversation_initiation_client_data was not delivered,
 // so the agent never received its variables and stayed silent.
 //   POST { action: "bind", session_id, conversation_id } → links the ElevenLabs conversation, marks live
-// Hidden needs are never sent to the browser here; the director feeds them to the actor later.
+// The patient's hidden needs go into {{ukryte_potrzeby}} with the disclosure rules (no live director:
+// trust and needs are analysed after the call, so nothing adds latency between turns).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "npm:zod@4";
@@ -111,11 +112,15 @@ serve(async (req) => {
     .single();
   if (error) throw error;
 
-  const { data: profile } = await db().from("profiles").select("display_name, gender").eq("id", user.id).maybeSingle();
+  const [{ data: profile }, { data: needs }] = await Promise.all([
+    db().from("profiles").select("display_name, gender").eq("id", user.id).maybeSingle(),
+    db().from("hidden_needs").select("id, actor_hint, points").eq("scenario_id", scenario.id).order("ord"),
+  ]);
   const vars = buildPatientVariables(persona.vars as Record<string, string>, {
     kind: followup ? "followup" : "first",
     previousVisit: followup?.text,
     psychologist: { name: profile?.display_name, gender: profile?.gender },
+    hiddenNeeds: (needs ?? []).map((n) => ({ actor_hint: n.actor_hint, points: n.points, carried: carried.includes(n.id) })),
   });
   return json({
     session_id: session.id,

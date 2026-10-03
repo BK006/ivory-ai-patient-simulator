@@ -5,14 +5,13 @@ import { ArrowLeft, ArrowRight, Shuffle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
-import { ClientBrief, Composer, LiveCaption, TrustMeter, VoiceControls, VoiceVisualizer, type BriefData, type Speaker } from "@/components/ivory/session";
-import { Badge, Button, Dialog, PageHead, SegmentedTabs } from "@/components/ivory/ui";
+import { ClientBrief, Composer, LiveCaption, VoiceControls, VoiceVisualizer, type BriefData, type Speaker } from "@/components/ivory/session";
+import { Badge, Button, Dialog, PageHead } from "@/components/ivory/ui";
 import { usePatientSession } from "@/hooks/usePatientSession";
 import { loadProfile } from "@/lib/profile";
 import { fmtDate, listScenarios, loadPreviousVisit, type ScenarioCard } from "@/lib/queries";
 import type { SessionMode } from "@/lib/types";
 
-const MODES = ["Trening", "Egzamin"] as const;
 
 type PreviousVisit = NonNullable<Awaited<ReturnType<typeof loadPreviousVisit>>>;
 
@@ -60,7 +59,6 @@ function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; pr
   const router = useRouter();
   const [all, setAll] = useState<ScenarioCard[] | null>(null);
   const [prev, setPrev] = useState<PreviousVisit | null | undefined>(previousSessionId ? undefined : null);
-  const [mode, setMode] = useState<(typeof MODES)[number]>("Trening");
   const [consent, setConsent] = useState(true);
   const [myName, setMyName] = useState<string | null | undefined>(undefined);
   const s = usePatientSession();
@@ -107,13 +105,6 @@ function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; pr
             <ClientBrief {...brief} />
           </div>
           <aside style={{ position: "sticky", top: 88, display: "grid", gap: 20, padding: 24, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-xl)" }}>
-            <div style={{ display: "grid", gap: 12 }}>
-              <span style={{ font: "var(--type-label)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: "var(--text-tertiary)" }}>Tryb sesji</span>
-              <SegmentedTabs items={[...MODES]} value={mode} onChange={setMode} />
-              <span style={{ font: "var(--type-body-s)", color: "var(--text-secondary)" }}>
-                {mode === "Trening" ? "Widzisz na żywo, jak zmienia się zaufanie pacjenta." : "Wskaźnik zaufania jest ukryty – zobaczysz go dopiero w raporcie."}
-              </span>
-            </div>
             <div style={{ display: "grid", gap: 4, paddingTop: 16, borderTop: "1px solid var(--line-subtle)", font: "var(--type-caption)", color: "var(--text-tertiary)" }}>
               <span>Rozmowa głosowa · ok. {scenario.est_minutes} min</span>
             </div>
@@ -130,7 +121,7 @@ function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; pr
             {s.error && <span style={{ font: "var(--type-body-s)", color: "var(--negative-text)" }}>{s.error}</span>}
             <div style={{ display: "grid", gap: 8 }}>
               <Button size="l" fullWidth disabled={!consent} iconRight={<ArrowRight size={18} strokeWidth={1.5} />}
-                onClick={() => s.start(scenario.id, (mode === "Trening" ? "training" : "exam") as SessionMode, prev?.id)}>
+                onClick={() => s.start(scenario.id, "training" as SessionMode, prev?.id)}>
                 Rozpocznij symulację
               </Button>
               {!followup && (
@@ -151,10 +142,10 @@ function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; pr
     );
   }
 
-  return <LiveSession session={s} brief={brief} training={mode === "Trening"} />;
+  return <LiveSession session={s} brief={brief} />;
 }
 
-function LiveSession({ session: s, brief, training }: { session: ReturnType<typeof usePatientSession>; brief: BriefData; training: boolean }) {
+function LiveSession({ session: s, brief }: { session: ReturnType<typeof usePatientSession>; brief: BriefData }) {
   const [captions, setCaptions] = useState(true);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [sec, setSec] = useState(0);
@@ -191,8 +182,6 @@ function LiveSession({ session: s, brief, training }: { session: ReturnType<type
     return () => window.removeEventListener("resize", fit);
   }, []);
   const time = `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
-  const lastDelta = s.trustHistory.length > 1 ? s.trustHistory.at(-1)!.delta : null;
-  const recentUnlock = s.lastUnlockAt != null && Date.now() - s.lastUnlockAt < 8000;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 32, height: "calc(100vh - 64px - 64px)", minHeight: 560 }}>
@@ -203,7 +192,6 @@ function LiveSession({ session: s, brief, training }: { session: ReturnType<type
           </Badge>
           <span style={{ font: "var(--type-mono)", color: "var(--text-tertiary)" }}>{time}</span>
           {s.isMuted && <Badge tone="warm">Mikrofon wyciszony</Badge>}
-          {!training && <Badge>Tryb egzaminu</Badge>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, minHeight: 0, overflow: "hidden" }}>
           <VoiceVisualizer speaker={speaker} getLevel={getLevel} name={brief.name}
@@ -218,7 +206,6 @@ function LiveSession({ session: s, brief, training }: { session: ReturnType<type
         </div>
       </div>
       <aside style={{ overflowY: "auto", minHeight: 0, display: "grid", gap: 16, alignContent: "start" }}>
-        {training && s.trust != null && <TrustMeter trust={s.trust} delta={lastDelta} pulse={recentUnlock} />}
         <ClientBrief compact {...brief} />
       </aside>
       <Dialog open={confirmEnd} onClose={() => setConfirmEnd(false)} title="Zakończyć sesję?"

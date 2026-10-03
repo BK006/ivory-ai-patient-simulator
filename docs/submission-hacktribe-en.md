@@ -21,7 +21,7 @@ Ivory is a training platform where a psychologist talks BY VOICE to an AI playin
 
 Verifiability and control: every quote in the evaluation must appear verbatim in the transcript (otherwise it is discarded), the score is the median of 3 independent evaluations with the spread shown, metrics are computed deterministically, and a "discovered need" requires a verified patient quote.
 
-Responsible AI: this is communication training, not therapy or diagnosis; the patient never gives self-harm methods (prompt guardrail + independent platform guardrail); personas avoid stereotypes; we analyse what is said, not emotions in the voice (EU AI Act, Art. 5).
+Responsible AI: this is communication training, not therapy or diagnosis; the patient never gives self-harm methods (prompt guardrail + independent platform guardrail); personas avoid stereotypes.
 
 Benefits: unlimited safe repetitions, instant and consistent feedback, less load on supervisors.
 

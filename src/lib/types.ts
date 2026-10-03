@@ -53,6 +53,10 @@ export type NeedReport = {
   label: string;
   /** 60 = main need, 20 = secondary, 0 = gated topic without points (risk signal). */
   points?: number;
+  /** How deeply the need was explored, 0–100 %; earned = points × depth. */
+  depth?: number;
+  earned?: number;
+  reason?: string | null;
   discovered: boolean;
   from_previous?: boolean;
   unlocked?: boolean;

@@ -21,7 +21,7 @@ Ivory to platforma treningowa, na której psycholog rozmawia GŁOSEM z AI odgryw
 
 Weryfikowalność i kontrola: każdy cytat w ocenie musi dosłownie występować w transkrypcie (inaczej jest odrzucany), ocena to mediana z 3 niezależnych ocen z widocznym rozrzutem, metryki są liczone deterministycznie, a „odkryta potrzeba” wymaga zweryfikowanego cytatu pacjenta.
 
-Odpowiedzialne AI: to trening komunikacji, nie terapia ani diagnoza; pacjent nigdy nie podaje metod samookaleczenia (guardrail promptu + niezależny guardrail platformy); persony bez stereotypów; analizujemy treść wypowiedzi, nie emocje z głosu (AI Act art. 5).
+Odpowiedzialne AI: to trening komunikacji, nie terapia ani diagnoza; pacjent nigdy nie podaje metod samookaleczenia (guardrail promptu + niezależny guardrail platformy); persony bez stereotypów.
 
 Korzyści: nieograniczona liczba bezpiecznych powtórek, natychmiastowa i powtarzalna informacja zwrotna, mniejsze obciążenie superwizorów.
 

@@ -1,32 +1,26 @@
 "use client";
 
-// Core session loop: start → live voice call → director after every therapist turn → finalize.
+// Core session loop: start → live voice call → finalize. Trust and needs are analysed only after the
+// call (finalize) – nothing runs between the patient's turns, so the agent answers without extra latency.
 // Must be used inside <ConversationProvider>.
 
 import { useConversation } from "@elevenlabs/react";
 import { useCallback, useRef, useState } from "react";
 import { callFn } from "@/lib/supabase";
-import type { DirectorResponse, SessionMode, StartResponse, TranscriptLine } from "@/lib/types";
+import type { SessionMode, StartResponse, TranscriptLine } from "@/lib/types";
 
 export type Phase = "idle" | "connecting" | "live" | "finishing" | "done" | "error";
-
-export type TrustSample = { t_s: number; trust: number; delta: number };
 
 export function usePatientSession() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [trust, setTrust] = useState<number | null>(null);
-  const [trustHistory, setTrustHistory] = useState<TrustSample[]>([]);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
-  const [lastUnlockAt, setLastUnlockAt] = useState<number | null>(null);
 
   const sessionRef = useRef<string | null>(null);
   const startedAt = useRef<number>(0);
-  const lastPatientText = useRef<string>("");
   const lastAgentAt = useRef(0);
   const lastAgentResponseId = useRef<string | undefined>(undefined);
-  const directorQueue = useRef<Promise<void>>(Promise.resolve());
   const finishing = useRef(false);
   /** Last typed message – the server may echo it back as a user transcript; don't count it twice. */
   const lastTyped = useRef<{ text: string; at: number } | null>(null);
@@ -49,7 +43,6 @@ export function usePatientSession() {
       if (!text) return;
       const t_s = elapsed();
       if (msg.role === "agent") {
-        lastPatientText.current = text;
         // Streamed parts of one response share response_id – replace instead of appending.
         // A new response right after the previous one with no therapist turn in between is a
         // regenerated reply (guardrail retry / interruption) – replace it too, so it isn't shown twice.
@@ -72,7 +65,6 @@ export function usePatientSession() {
         return;
       }
       setTranscript((lines) => [...lines, { role: "therapist", text, t_s }]);
-      enqueueDirector(text, lastPatientText.current, t_s);
     },
     onDisconnect: () => {
       // The patient may end the call itself (end_call after the goodbye) – evaluate anyway.
@@ -84,34 +76,10 @@ export function usePatientSession() {
     },
   });
 
-  const sendUpdate = conversation.sendContextualUpdate;
-
-  const enqueueDirector = (therapistText: string, patientText: string, t_s: number) => {
-    const id = sessionRef.current;
-    if (!id) return;
-    directorQueue.current = directorQueue.current.then(async () => {
-      try {
-        const res = await callFn<DirectorResponse>("director", {
-          session_id: id,
-          therapist_text: therapistText,
-          patient_text: patientText || undefined,
-          t_s,
-        });
-        setTrust(res.trust);
-        setTrustHistory((h) => [...h, { t_s, trust: res.trust, delta: res.delta }]);
-        if (res.unlocked) setLastUnlockAt(Date.now());
-        if (!finishing.current) sendUpdate(res.update_text);
-      } catch (err) {
-        console.error("director failed", err);
-      }
-    });
-  };
-
   const start = useCallback(
     async (scenarioId: string, mode: SessionMode, previousSessionId?: string) => {
       setError(null);
       setTranscript([]);
-      setTrustHistory([]);
       finishing.current = false;
       setPhase("connecting");
       try {
@@ -123,8 +91,6 @@ export function usePatientSession() {
         });
         sessionRef.current = res.session_id;
         setSessionId(res.session_id);
-        setTrust(res.trust);
-        setTrustHistory([{ t_s: 0, trust: res.trust, delta: 0 }]);
         conversation.startSession({
           signedUrl: res.signed_url,
           connectionType: "websocket",
@@ -145,7 +111,7 @@ export function usePatientSession() {
     [conversation],
   );
 
-  /** Ends the call, waits for pending director turns, then starts the evaluation. */
+  /** Ends the call, then starts the evaluation. */
   const finish = useCallback(async (): Promise<string | null> => {
     const id = sessionRef.current;
     if (!id || finishing.current) return id;
@@ -154,7 +120,6 @@ export function usePatientSession() {
     try {
       conversation.endSession();
     } catch { /* already disconnected */ }
-    await directorQueue.current;
     try {
       await callFn("finalize", { session_id: id });
       setPhase("done");
@@ -165,7 +130,7 @@ export function usePatientSession() {
     return id;
   }, [conversation]);
 
-  /** Typed alternative to speaking: goes to the patient and through the director like a voice turn. */
+  /** Typed alternative to speaking: goes to the patient like a voice turn. */
   const sendText = useCallback(
     (raw: string) => {
       const text = raw.trim();
@@ -174,9 +139,7 @@ export function usePatientSession() {
       lastTyped.current = { text, at: Date.now() };
       conversation.sendUserMessage(text);
       setTranscript((lines) => [...lines, { role: "therapist", text, t_s }]);
-      enqueueDirector(text, lastPatientText.current, t_s);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [conversation, phase],
   );
 
@@ -184,10 +147,7 @@ export function usePatientSession() {
     phase,
     error,
     sessionId,
-    trust,
-    trustHistory,
     transcript,
-    lastUnlockAt,
     isSpeaking: conversation.isSpeaking,
     isMuted: conversation.isMuted,
     setMuted: conversation.setMuted,
