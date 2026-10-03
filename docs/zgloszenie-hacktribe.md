@@ -21,7 +21,7 @@ Ivory to platforma treningowa, na której psycholog rozmawia GŁOSEM z AI odgryw
 
 Weryfikowalność i kontrola: każdy cytat w ocenie musi dosłownie występować w transkrypcie (inaczej jest odrzucany), ocena to mediana z 3 niezależnych ocen z widocznym rozrzutem, metryki są liczone deterministycznie, a „odkryta potrzeba” wymaga zweryfikowanego cytatu pacjenta.
 
-Odpowiedzialne AI: to trening komunikacji, nie terapia ani diagnoza; pacjent nigdy nie podaje metod samookaleczenia (guardrail promptu + niezależny guardrail platformy); persony bez stereotypów; analizujemy treść wypowiedzi, nie emocje z głosu (AI Act art. 5); słowo „STOP” przerywa ćwiczenie.
+Odpowiedzialne AI: to trening komunikacji, nie terapia ani diagnoza; pacjent nigdy nie podaje metod samookaleczenia (guardrail promptu + niezależny guardrail platformy); persony bez stereotypów; analizujemy treść wypowiedzi, nie emocje z głosu (AI Act art. 5).
 
 Korzyści: nieograniczona liczba bezpiecznych powtórek, natychmiastowa i powtarzalna informacja zwrotna, mniejsze obciążenie superwizorów.
 
@@ -75,7 +75,6 @@ https://probna-sesja.vercel.app
 4. „Rozpocznij symulację” i zezwól na mikrofon. Rozmawiaj po polsku jak na pierwszej wizycie; w trybie „Trening” widzisz na żywo zaufanie pacjenta.
 5. „Zakończ” → „Zakończ i oceń”. Po ok. minucie pojawi się raport: wynik, 8 kryteriów z cytatami (klik = odsłuch), wykres zaufania, odkryte/przeoczone potrzeby, momenty do coachingu.
 6. W raporcie „Umów kolejną wizytę” – ten sam pacjent pamięta poprzednią rozmowę.
-Powiedz „STOP”, aby wyjść z roli w dowolnym momencie.
 
 Uruchomienie lokalne: `npm install` → `npm run dev`. Backend działa w Supabase Edge Functions (klucze ElevenLabs i OpenAI tylko w Supabase secrets); schemat bazy w `supabase/migrations/`.
 

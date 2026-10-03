@@ -37,7 +37,7 @@ function agentConfig() {
             },
             end_call: {
               name: "end_call",
-              description: "Zakończ rozmowę, gdy spełnione są warunki zakończenia albo rozmówca powiedział STOP.",
+              description: "Zakończ rozmowę tylko wtedy, gdy psycholog się pożegnał.",
               params: { system_tool_type: "end_call" },
             },
           },

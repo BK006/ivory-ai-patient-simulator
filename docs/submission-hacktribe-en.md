@@ -21,7 +21,7 @@ Ivory is a training platform where a psychologist talks BY VOICE to an AI playin
 
 Verifiability and control: every quote in the evaluation must appear verbatim in the transcript (otherwise it is discarded), the score is the median of 3 independent evaluations with the spread shown, metrics are computed deterministically, and a "discovered need" requires a verified patient quote.
 
-Responsible AI: this is communication training, not therapy or diagnosis; the patient never gives self-harm methods (prompt guardrail + independent platform guardrail); personas avoid stereotypes; we analyse what is said, not emotions in the voice (EU AI Act, Art. 5); saying "STOP" ends the exercise.
+Responsible AI: this is communication training, not therapy or diagnosis; the patient never gives self-harm methods (prompt guardrail + independent platform guardrail); personas avoid stereotypes; we analyse what is said, not emotions in the voice (EU AI Act, Art. 5).
 
 Benefits: unlimited safe repetitions, instant and consistent feedback, less load on supervisors.
 
@@ -75,7 +75,6 @@ https://probna-sesja.vercel.app
 4. Click "Rozpocznij symulację" (Start simulation) and allow the microphone. Speak Polish as in a first appointment; in "Trening" mode you see the patient's trust live.
 5. "Zakończ" → "Zakończ i oceń" (End and evaluate). After about a minute the report appears: score, 8 criteria with quotes (click = replay), trust chart, discovered/missed needs, coaching moments.
 6. In the report, "Umów kolejną wizytę" (Book a follow-up visit) – the same patient remembers the previous conversation.
-Say "STOP" at any time to step out of the role-play.
 
 Running locally: `npm install` → `npm run dev`. The backend runs on Supabase Edge Functions (ElevenLabs and OpenAI keys only in Supabase secrets); the database schema is in `supabase/migrations/`.
 

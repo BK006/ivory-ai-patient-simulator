@@ -48,7 +48,6 @@ Cztery karty:
 - Pacjent nigdy nie podaje metod samookaleczenia (guardrail promptu + niezależny guardrail platformy); ryzyko jest sygnalizowane tak, by uczyć rozpoznawania.
 - Persony bez stereotypów (osoba z myślami prześladowczymi nie jest przedstawiana jako groźna).
 - Analizujemy treść wypowiedzi, nie emocje z głosu (AI Act, art. 5 ust. 1 lit. f).
-- Słowo „STOP” przerywa ćwiczenie; po trudnym scenariuszu numery pomocowe (116 123, 800 70 2222).
 - Nagrania z retencją 30 dni, zgoda przed sesją.
 
 **9. Dla kogo i wdrożenie**

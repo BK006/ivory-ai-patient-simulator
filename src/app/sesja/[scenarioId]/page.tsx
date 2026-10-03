@@ -116,7 +116,6 @@ function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; pr
             </div>
             <div style={{ display: "grid", gap: 4, paddingTop: 16, borderTop: "1px solid var(--line-subtle)", font: "var(--type-caption)", color: "var(--text-tertiary)" }}>
               <span>Rozmowa głosowa · ok. {scenario.est_minutes} min</span>
-              <span>Powiedz „STOP”, by wyjść z roli</span>
             </div>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10, font: "var(--type-caption)", color: "var(--text-secondary)", cursor: "pointer" }}>
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 2, accentColor: "var(--graphite-900)" }} />
@@ -221,9 +220,6 @@ function LiveSession({ session: s, brief, training }: { session: ReturnType<type
       <aside style={{ overflowY: "auto", minHeight: 0, display: "grid", gap: 16, alignContent: "start" }}>
         {training && s.trust != null && <TrustMeter trust={s.trust} delta={lastDelta} pulse={recentUnlock} />}
         <ClientBrief compact {...brief} />
-        <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)", padding: "0 4px" }}>
-          Powiedz „STOP”, żeby wyjść z roli i przerwać ćwiczenie.
-        </span>
       </aside>
       <Dialog open={confirmEnd} onClose={() => setConfirmEnd(false)} title="Zakończyć sesję?"
         description="Otrzymasz ocenę od 1 do 100, cytaty z rozmowy i konkretne propozycje lepszych wypowiedzi."

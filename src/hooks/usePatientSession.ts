@@ -75,7 +75,7 @@ export function usePatientSession() {
       enqueueDirector(text, lastPatientText.current, t_s);
     },
     onDisconnect: () => {
-      // The patient may end the call itself (end_call after STOP) – evaluate anyway.
+      // The patient may end the call itself (end_call after the goodbye) – evaluate anyway.
       void finish();
     },
     onError: (message) => {
