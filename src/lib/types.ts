@@ -53,6 +53,8 @@ export type NeedReport = {
   label: string;
   discovered: boolean;
   from_previous?: boolean;
+  unlocked?: boolean;
+  quote?: string | null;
   unlocked_at_s: number | null;
   missed_hint: string;
 };

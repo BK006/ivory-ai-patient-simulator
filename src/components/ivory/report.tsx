@@ -231,7 +231,7 @@ export function NextSteps({ items }: { items: string[] }) {
   );
 }
 
-export function NeedsList({ needs }: { needs: { id: string; label: string; discovered: boolean; from_previous?: boolean; unlocked_at_s: number | null; missed_hint: string }[] }) {
+export function NeedsList({ needs }: { needs: { id: string; label: string; discovered: boolean; from_previous?: boolean; unlocked?: boolean; quote?: string | null; unlocked_at_s: number | null; missed_hint: string }[] }) {
   const found = needs.filter((n) => n.discovered).length;
   return (
     <div style={{ display: "grid", gap: 12, padding: 24, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-l)" }}>
@@ -248,11 +248,13 @@ export function NeedsList({ needs }: { needs: { id: string; label: string; disco
             <span style={{ font: "var(--type-body-s)", fontWeight: 500, color: n.discovered ? "var(--text-primary)" : "var(--text-secondary)" }}>
               {n.label}{n.from_previous ? " · z poprzedniej wizyty" : n.discovered && n.unlocked_at_s != null ? ` · ${fmtTime(n.unlocked_at_s)}` : ""}
             </span>
+            {n.discovered && n.quote && <span style={{ font: "var(--type-caption)", fontStyle: "italic", color: "var(--text-secondary)" }}>„{n.quote}”</span>}
+            {!n.discovered && n.unlocked && <span style={{ font: "var(--type-caption)", color: "#8A5A2B" }}>Pacjent był gotów o tym powiedzieć, ale temat nie został podjęty.</span>}
             {!n.discovered && <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Co mogło otworzyć: {n.missed_hint}</span>}
           </div>
         </div>
       ))}
-      <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Z logu stanu pacjenta, nie z opinii modelu.</span>
+      <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Odkryta = pacjent ją odblokował (log stanu) i faktycznie o niej powiedział (cytat zweryfikowany w transkrypcie). Na kolejną wizytę przechodzą tylko odkryte.</span>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 //   POST { scenario_id, mode, previous_session_id? } → creates the session, returns a signed WebSocket URL
 //                                                 + dynamic variables + voice override.
 //     With previous_session_id it is a follow-up visit: the previous transcript and summary go to the
-//     agent as {{poprzednia_wizyta}}, trust and unlocked hidden needs carry over.
+//     agent as {{poprzednia_wizyta}}; trust and DISCOVERED hidden needs carry over (unexplored ones don't).
 // WebSocket (not WebRTC): over LiveKit the conversation_initiation_client_data was not delivered,
 // so the agent never received its variables and stayed silent.
 //   POST { action: "bind", session_id, conversation_id } → links the ElevenLabs conversation, marks live
@@ -25,7 +25,7 @@ const StartBody = z.object({
 async function previousVisitContext(sessionId: string, userId: string, scenarioId: string) {
   const { data: prev, error } = await db()
     .from("sessions")
-    .select("id, user_id, scenario_id, status, summary, trust, unlocked_need_ids, created_at")
+    .select("id, user_id, scenario_id, status, summary, trust, metrics, created_at")
     .eq("id", sessionId)
     .maybeSingle();
   if (error) throw error;
@@ -86,7 +86,9 @@ serve(async (req) => {
   const followup = start.data.previous_session_id
     ? await previousVisitContext(start.data.previous_session_id, user.id, scenario.id)
     : null;
-  const carried: string[] = followup?.prev.unlocked_need_ids ?? [];
+  // Only needs the patient actually disclosed carry over; unexplored ones must be discovered again.
+  const prevNeeds = ((followup?.prev.metrics as { needs?: { id: string; discovered: boolean }[] } | null)?.needs) ?? [];
+  const carried: string[] = prevNeeds.filter((n) => n.discovered).map((n) => n.id);
   // Some warmth is lost between visits, but the alliance mostly carries over.
   const trustStart = followup ? Math.max(scenario.trust_start, (followup.prev.trust ?? scenario.trust_start) - 5) : scenario.trust_start;
 

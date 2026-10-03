@@ -4,11 +4,14 @@
 //     2. deterministic metrics from the director log (R:Q, % open questions, trust curve, needs)
 //     3. rubric evaluation ×3 in parallel (OpenAI, structured output) → median + spread per criterion
 //     4. quote verification: every quote must literally appear in the transcript, otherwise dropped
-//     5. status → evaluated (the browser watches the session row)
+//     5. hidden needs: "discovered" only if unlocked by trust (director log), the required question was
+//        asked, AND the patient actually said it – proven by a verified quote from a patient turn.
+//        Only discovered needs carry over to a follow-up visit.
+//     6. status → evaluated (the browser watches the session row)
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "npm:zod@4";
-import { ai, db, eleven, EVAL_MODEL, HttpError, json, normalize, requireUser, serve } from "../_shared/common.ts";
+import { ai, db, DIRECTOR_MODEL, eleven, EVAL_MODEL, HttpError, json, normalize, requireUser, serve } from "../_shared/common.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -224,6 +227,66 @@ function locateQuote(turns: Turn[], claimedIdx: number, quote: string): number |
   return turns.find((t) => normalize(t.text).includes(q))?.idx ?? null;
 }
 
+const DISCLOSURE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["needs"],
+  properties: {
+    needs: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "disclosed", "turn_idx", "quote"],
+        properties: {
+          id: { type: "string" },
+          disclosed: { type: "boolean" },
+          turn_idx: { type: "integer" },
+          quote: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * For needs the patient was allowed to reveal, checks whether the patient actually said it.
+ * Returns only needs with a quote that literally appears in a PATIENT turn.
+ */
+async function verifyDisclosures(
+  candidates: { id: string; label: string; actor_hint: string }[],
+  turns: Turn[],
+): Promise<Map<string, { quote: string; t_s: number | null }>> {
+  const result = new Map<string, { quote: string; t_s: number | null }>();
+  const patientTurns = turns.filter((t) => t.speaker === "patient");
+  if (!candidates.length || !patientTurns.length) return result;
+  const response = await ai().responses.create({
+    model: DIRECTOR_MODEL,
+    reasoning: { effort: "low" },
+    input: [
+      {
+        role: "system",
+        content: `Sprawdzasz, czy pacjent w rozmowie treningowej FAKTYCZNIE ujawnił podane tematy. Temat jest ujawniony tylko wtedy, gdy pacjent wprost lub jednoznacznie o nim powiedział (sama aluzja, której psycholog nie podjął, to za mało). Dla każdego tematu zwróć disclosed, turn_idx tury PACJENTA i DOSŁOWNY cytat (3–25 słów) z tej tury. Jeśli temat nie został ujawniony: disclosed=false, turn_idx=-1, quote="".`,
+      },
+      {
+        role: "user",
+        content: `Tematy:\n${candidates.map((n) => `- id=${n.id}: ${n.label} (${n.actor_hint})`).join("\n")}\n\nTranskrypt:\n${turns
+          .map((t) => `[${t.idx}] ${t.speaker === "therapist" ? "PSYCHOLOG" : "PACJENT"}: ${t.text}`)
+          .join("\n")}`,
+      },
+    ],
+    text: { format: { type: "json_schema", name: "need_disclosures", strict: true, schema: DISCLOSURE_SCHEMA } },
+  });
+  const parsed = JSON.parse(response.output_text) as { needs: { id: string; disclosed: boolean; turn_idx: number; quote: string }[] };
+  for (const d of parsed.needs) {
+    if (!d.disclosed || !candidates.some((c) => c.id === d.id)) continue;
+    const idx = locateQuote(patientTurns, d.turn_idx, d.quote);
+    if (idx === null) continue; // unverifiable quote → not counted as discovered
+    result.set(d.id, { quote: d.quote, t_s: patientTurns.find((t) => t.idx === idx)?.t_start_s ?? null });
+  }
+  return result;
+}
+
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
@@ -246,7 +309,7 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
       .select("therapist_text, tags, trust_before, trust_after, unlocked_need_id, note, t_s, created_at")
       .eq("session_id", sessionId)
       .order("created_at"),
-    db().from("hidden_needs").select("id, ord, label, required_tags, missed_hint").eq("scenario_id", scenarioId).order("ord"),
+    db().from("hidden_needs").select("id, ord, label, actor_hint, required_tags, missed_hint").eq("scenario_id", scenarioId).order("ord"),
     db().from("sessions").select("trust, carried_need_ids").eq("id", sessionId).single(),
   ]);
   const carried = new Set<string>(sessionRow?.carried_need_ids ?? []);
@@ -255,20 +318,33 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
   const trustStart = log[0]?.trust_before ?? sessionRow?.trust ?? scenario!.trust_start;
   const metrics = computeMetrics(turns, log, trustStart);
 
-  // Needs: unlocked by trust (director log); some also require a specific tag at/after unlock.
-  const needsReport = (needs ?? []).map((n) => {
+  // Needs: unlocked by trust (director log); some also require a specific tag at/after unlock;
+  // and the patient must have actually disclosed it (verified quote). Carried needs stay discovered.
+  type NeedRow = { id: string; ord: number; label: string; actor_hint: string; required_tags: string[]; missed_hint: string };
+  const needRows = (needs ?? []) as NeedRow[];
+  const candidates = needRows.filter((n) => {
+    if (carried.has(n.id)) return false;
     const unlockIdx = log.findIndex((e) => e.unlocked_need_id === n.id);
-    const tagsOk =
-      unlockIdx >= 0 &&
+    return unlockIdx >= 0 &&
       (n.required_tags.length === 0 ||
-        log.slice(unlockIdx).some((e) => n.required_tags.some((t: string) => e.tags.includes(t))));
+        log.slice(unlockIdx).some((e) => n.required_tags.some((t) => e.tags.includes(t))));
+  });
+  const disclosures = await verifyDisclosures(candidates, turns).catch((err) => {
+    console.error("disclosure check failed", err);
+    return new Map<string, { quote: string; t_s: number | null }>();
+  });
+  const needsReport = needRows.map((n) => {
+    const unlockIdx = log.findIndex((e) => e.unlocked_need_id === n.id);
     const fromPrevious = carried.has(n.id);
+    const disclosed = disclosures.get(n.id);
     return {
       id: n.id,
       label: n.label,
-      discovered: fromPrevious || (unlockIdx >= 0 && tagsOk),
+      discovered: fromPrevious || Boolean(disclosed),
       from_previous: fromPrevious,
-      unlocked_at_s: unlockIdx >= 0 ? log[unlockIdx].t_s : null,
+      unlocked: unlockIdx >= 0,
+      unlocked_at_s: disclosed?.t_s ?? (unlockIdx >= 0 ? log[unlockIdx].t_s : null),
+      quote: disclosed?.quote ?? null,
       missed_hint: n.missed_hint,
     };
   });
