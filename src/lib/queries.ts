@@ -2,7 +2,7 @@
 
 // Read-only data access for the UI (RLS limits rows to the signed-in user).
 
-import { ensureUser, supabase } from "./supabase";
+import { callFn, ensureUser, supabase } from "./supabase";
 import type { CoachingMoment, ScoreRow, Turn } from "./types";
 
 export type ScenarioCard = {
@@ -88,8 +88,15 @@ export async function loadReport(sessionId: string) {
   ]);
   if (session.error) throw session.error;
   let audioUrl: string | null = null;
-  if (session.data?.audio_path) {
-    const { data } = await supabase.storage.from("session-audio").createSignedUrl(session.data.audio_path, 3600);
+  let audioPath = session.data?.audio_path ?? null;
+  // The recording may not have been ready when the session was evaluated – ask the server to fetch it now.
+  if (!audioPath && session.data?.status === "evaluated") {
+    audioPath = await callFn<{ audio_path: string | null }>("finalize", { session_id: sessionId, action: "audio" })
+      .then((r) => r.audio_path)
+      .catch(() => null);
+  }
+  if (audioPath) {
+    const { data } = await supabase.storage.from("session-audio").createSignedUrl(audioPath, 3600);
     audioUrl = data?.signedUrl ?? null;
   }
   const sortedScores = ((scores.data ?? []) as unknown as ScoreRow[]).sort((a, b) => a.criteria.ord - b.criteria.ord);

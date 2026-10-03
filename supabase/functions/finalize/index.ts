@@ -8,6 +8,8 @@
 //        asked, AND the patient actually said it – proven by a verified quote from a patient turn.
 //        Only discovered needs carry over to a follow-up visit.
 //     6. status → evaluated (the browser watches the session row)
+//   POST { session_id, action: "audio" } → retries storing the recording of an evaluated session
+//     (ElevenLabs serves the audio only some time after the call; the report asks for it when missing).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "npm:zod@4";
@@ -16,7 +18,7 @@ import { ai, db, DIRECTOR_MODEL, eleven, EVAL_MODEL, HttpError, json, normalize,
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
 const RUNS = 3;
-const Body = z.object({ session_id: z.uuid() });
+const Body = z.object({ session_id: z.uuid(), action: z.literal("audio").optional() });
 
 type Turn = { idx: number; speaker: "therapist" | "patient"; text: string; t_start_s: number | null };
 type DirectorEvent = {
@@ -49,6 +51,12 @@ serve(async (req) => {
     .maybeSingle();
   if (error) throw error;
   if (!session || session.user_id !== user.id) throw new HttpError(404, "Nie znaleziono sesji.");
+  if (parsed.data.action === "audio") {
+    if (!session.el_conversation_id) return json({ audio_path: null });
+    const audioPath = await storeAudio(session.id, session.el_conversation_id, 1);
+    if (audioPath) await db().from("sessions").update({ audio_path: audioPath }).eq("id", session.id);
+    return json({ audio_path: audioPath });
+  }
   if (!["created", "live", "ended", "failed"].includes(session.status)) return json({ status: session.status }, 202);
   if (!session.el_conversation_id) throw new HttpError(409, "Rozmowa nie została rozpoczęta.");
 
@@ -85,19 +93,23 @@ async function fetchTranscript(conversationId: string): Promise<Turn[]> {
   return [];
 }
 
-async function storeAudio(sessionId: string, conversationId: string): Promise<string | null> {
-  try {
-    const res = await eleven(`/v1/convai/conversations/${conversationId}/audio`);
-    const path = `${sessionId}.mp3`;
-    const { error } = await db().storage
-      .from("session-audio")
-      .upload(path, await res.arrayBuffer(), { contentType: "audio/mpeg", upsert: true });
-    if (error) throw error;
-    return path;
-  } catch (err) {
-    console.error("audio download failed", err);
-    return null;
+async function storeAudio(sessionId: string, conversationId: string, attempts = 12): Promise<string | null> {
+  // The recording becomes available some seconds after the transcript – 404 until then.
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await eleven(`/v1/convai/conversations/${conversationId}/audio`);
+      const path = `${sessionId}.mp3`;
+      const { error } = await db().storage
+        .from("session-audio")
+        .upload(path, await res.arrayBuffer(), { contentType: "audio/mpeg", upsert: true });
+      if (error) throw error;
+      return path;
+    } catch (err) {
+      if (attempt === attempts - 1) console.error("audio download failed", err);
+      else await new Promise((r) => setTimeout(r, 5000));
+    }
   }
+  return null;
 }
 
 function computeMetrics(turns: Turn[], events: DirectorEvent[], trustStart: number) {
@@ -294,7 +306,9 @@ function median(xs: number[]): number {
 }
 
 async function evaluate(sessionId: string, conversationId: string, scenarioId: string) {
-  const [turns, audioPath] = await Promise.all([fetchTranscript(conversationId), storeAudio(sessionId, conversationId)]);
+  // Audio is fetched alongside the evaluation and only awaited at the end – it may take a while.
+  const audioPromise = storeAudio(sessionId, conversationId);
+  const turns = await fetchTranscript(conversationId);
 
   await db().from("turns").delete().eq("session_id", sessionId);
   if (turns.length) {
@@ -460,7 +474,7 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
       status: "evaluated",
       overall_score: Math.round(((avg - 1) / 3) * 100),
       summary: runs[0].summary,
-      audio_path: audioPath,
+      audio_path: await audioPromise,
       metrics: { ...metrics, needs: needsReport, eval_runs: runs.length, rejected_quotes: rejectedQuotes },
     })
     .eq("id", sessionId);
