@@ -1,9 +1,10 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, PageHead, SegmentedTabs } from "@/components/ivory/ui";
 import { guessGender, loadProfile, saveProfile, type Gender } from "@/lib/profile";
+import { signOut, supabase } from "@/lib/supabase";
 
 const FORMS = ["Pani", "Pan"] as const;
 type Form = (typeof FORMS)[number];
@@ -16,8 +17,10 @@ export default function SettingsPage() {
   const [manual, setManual] = useState(false);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     loadProfile()
       .then((p) => {
         if (p.display_name) setName(p.display_name);
@@ -90,6 +93,13 @@ export default function SettingsPage() {
             </span>
           )}
         </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 32px", background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-xl)" }}>
+        <div style={{ display: "grid", gap: 2 }}>
+          <span style={{ font: "var(--type-body-s)", fontWeight: 500 }}>Zalogowano</span>
+          <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>{email ?? "…"}</span>
+        </div>
+        <Button variant="secondary" iconLeft={<LogOut size={16} strokeWidth={1.5} />} onClick={() => void signOut()}>Wyloguj</Button>
       </div>
     </div>
   );
