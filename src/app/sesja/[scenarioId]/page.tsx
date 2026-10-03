@@ -183,6 +183,14 @@ function LiveSession({ session: s, brief, training }: { session: ReturnType<type
   const getLevel = useCallback(() => (speaker === "client" ? getOut() : speaker === "you" ? getIn() : 0), [speaker, getOut, getIn]);
 
   const last = s.transcript.at(-1);
+  // Visualizer shrinks on short screens so caption, composer and controls never overlap.
+  const [vizSize, setVizSize] = useState(260);
+  useEffect(() => {
+    const fit = () => setVizSize(Math.max(160, Math.min(280, Math.round(window.innerHeight - 128 - 400))));
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
   const time = `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
   const lastDelta = s.trustHistory.length > 1 ? s.trustHistory.at(-1)!.delta : null;
   const recentUnlock = s.lastUnlockAt != null && Date.now() - s.lastUnlockAt < 8000;
@@ -198,15 +206,15 @@ function LiveSession({ session: s, brief, training }: { session: ReturnType<type
           {s.isMuted && <Badge tone="warm">Mikrofon wyciszony</Badge>}
           {!training && <Badge>Tryb egzaminu</Badge>}
         </div>
-        <div style={{ display: "grid", placeItems: "center", alignContent: "center", gap: 32, minHeight: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, minHeight: 0, overflow: "hidden" }}>
           <VoiceVisualizer speaker={speaker} getLevel={getLevel} name={brief.name}
-            label={s.phase === "connecting" ? "Łączenie z pacjentem…" : s.phase === "finishing" ? "Analizuję rozmowę…" : undefined} size={300} />
-          <div style={{ minHeight: 84, display: "grid", placeItems: "start center" }}>
+            label={s.phase === "connecting" ? "Łączenie z pacjentem…" : s.phase === "finishing" ? "Analizuję rozmowę…" : undefined} size={vizSize} />
+          <div style={{ minHeight: 72, maxHeight: 120, overflow: "hidden", display: "grid", placeItems: "start center" }}>
             {captions && last && <LiveCaption key={`${s.transcript.length}-${last.role}`} speaker={last.role === "therapist" ? "you" : "client"} name={first} text={last.text} />}
           </div>
-          <Composer onSend={s.sendText} disabled={s.phase !== "live"} />
         </div>
-        <div style={{ paddingBottom: 8 }}>
+        <div style={{ display: "grid", gap: 12, justifyItems: "center", paddingBottom: 8 }}>
+          <Composer onSend={s.sendText} disabled={s.phase !== "live"} />
           <VoiceControls muted={s.isMuted} onMute={() => s.setMuted(!s.isMuted)} captions={captions} onCaptions={() => setCaptions((x) => !x)} onEnd={() => setConfirmEnd(true)} />
         </div>
       </div>

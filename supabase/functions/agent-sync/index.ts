@@ -30,6 +30,11 @@ function agentConfig() {
           llm: AGENT_LLM,
           temperature: 0.8,
           built_in_tools: {
+            skip_turn: {
+              name: "skip_turn",
+              description: "Pomiń swoją kolejkę i milcz, gdy psycholog milczy albo jego wypowiedź jest pusta lub niezrozumiała.",
+              params: { system_tool_type: "skip_turn" },
+            },
             end_call: {
               name: "end_call",
               description: "Zakończ rozmowę, gdy spełnione są warunki zakończenia albo rozmówca powiedział STOP.",
@@ -39,7 +44,8 @@ function agentConfig() {
         },
       },
       tts: { ...(DEFAULT_VOICE ? { voice_id: DEFAULT_VOICE } : {}), model_id: "eleven_v4_turbo", expressive_mode: true },
-      turn: { turn_eagerness: "patient" },
+      // Long silence timeout: after a short pause the LLM used to "fill" it like an assistant.
+      turn: { turn_eagerness: "patient", turn_timeout: 20 },
       conversation: { max_duration_seconds: 1200 },
     },
     platform_settings: {
@@ -55,6 +61,8 @@ function agentConfig() {
         prompt_injection: { is_enabled: true },
         // No built-in self_harm content filter: the patient must be able to voice passive
         // death wishes so trainees learn to ask about risk. The custom rule below blocks methods.
+        // One narrow custom rule only: a blocking rule's "retry" restarts already-spoken audio, so a
+        // false positive makes the patient repeat sentences (full-response mode is unsupported with TTS).
         custom: {
           config: {
             configs: [
@@ -62,26 +70,13 @@ function agentConfig() {
                 is_enabled: true,
                 name: "Brak szczegółów metod",
                 prompt:
-                  "Block the agent if it describes methods, means, places, amounts or plans of self-harm or suicide. Expressing passive thoughts such as 'sometimes I wish I would not wake up' is allowed.",
+                  "Trigger ONLY if the response explicitly names a concrete method, means, place, amount or plan of self-harm or suicide (e.g. pills, a dose, a rope, a bridge, cutting). Do NOT trigger for passive thoughts such as 'sometimes I wish I would not wake up', for talk about insomnia, tiredness, sadness, a neighbour, or for anything else.",
                 execution_mode: "blocking",
                 model: "gemini-2.5-flash-lite",
                 history_message_count: 1,
                 trigger_action: {
                   type: "retry",
                   feedback: "Nie podawaj żadnych szczegółów metod. Odpowiedz wymijająco, w roli. Powód: {{trigger_reason}}",
-                },
-              },
-              {
-                is_enabled: true,
-                name: "Pacjent nie terapeutyzuje",
-                prompt:
-                  "Block the agent if it gives therapeutic or medical advice to the user, coaches the user, or speaks as an AI assistant instead of as the simulated patient (except when the user said STOP and the agent is ending the exercise).",
-                execution_mode: "blocking",
-                model: "gemini-2.5-flash-lite",
-                history_message_count: 2,
-                trigger_action: {
-                  type: "retry",
-                  feedback: "Zostań w roli pacjenta i nie doradzaj. Powód: {{trigger_reason}}",
                 },
               },
             ],

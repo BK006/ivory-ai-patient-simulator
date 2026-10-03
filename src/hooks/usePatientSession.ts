@@ -24,6 +24,7 @@ export function usePatientSession() {
   const sessionRef = useRef<string | null>(null);
   const startedAt = useRef<number>(0);
   const lastPatientText = useRef<string>("");
+  const lastAgentAt = useRef(0);
   const lastAgentResponseId = useRef<string | undefined>(undefined);
   const directorQueue = useRef<Promise<void>>(Promise.resolve());
   const finishing = useRef(false);
@@ -50,8 +51,12 @@ export function usePatientSession() {
       if (msg.role === "agent") {
         lastPatientText.current = text;
         // Streamed parts of one response share response_id – replace instead of appending.
+        // A new response right after the previous one with no therapist turn in between is a
+        // regenerated reply (guardrail retry / interruption) – replace it too, so it isn't shown twice.
+        const quickRedo = Date.now() - lastAgentAt.current < 6000;
+        lastAgentAt.current = Date.now();
         setTranscript((lines) => {
-          if (msg.response_id && msg.response_id === lastAgentResponseId.current && lines.at(-1)?.role === "patient") {
+          if (lines.at(-1)?.role === "patient" && ((msg.response_id && msg.response_id === lastAgentResponseId.current) || quickRedo)) {
             return [...lines.slice(0, -1), { role: "patient", text, t_s: lines.at(-1)!.t_s }];
           }
           return [...lines, { role: "patient", text, t_s }];
@@ -59,6 +64,8 @@ export function usePatientSession() {
         lastAgentResponseId.current = msg.response_id;
         return;
       }
+      // Silence/noise arrives as "..." – not a therapist turn, don't score it.
+      if (!/\p{L}/u.test(text)) return;
       const typed = lastTyped.current;
       if (typed && typed.text === text && Date.now() - typed.at < 15000) {
         lastTyped.current = null;

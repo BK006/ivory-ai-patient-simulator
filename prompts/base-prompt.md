@@ -13,7 +13,7 @@ Prompt agenta składa się wyłącznie ze zmiennych dynamicznych. Źródło praw
 
 Ukryte potrzeby **nie** są zmiennymi. Dostaje je reżyser (`director`) przez `sendContextualUpdate` dopiero po przekroczeniu progu zaufania.
 
-Guardrails platformy (niezależne od LLM): `focus`, `prompt_injection`, własne reguły „Brak szczegółów metod” i „Pacjent nie terapeutyzuje”. Wbudowany filtr `self_harm` jest wyłączony celowo, bo pacjent musi móc zasygnalizować myśli rezygnacyjne.
+Guardrails platformy (niezależne od LLM): `focus`, `prompt_injection`, jedna wąska reguła „Brak szczegółów metod” (blokująca reguła z „retry” restartuje już wypowiedziane audio, więc fałszywe alarmy powodowały powtarzanie zdań — dlatego reguła „Pacjent nie terapeutyzuje” została usunięta, a rola pacjenta jest pilnowana w promptcie). Narzędzia: `end_call` (tylko po pożegnaniu psychologa lub STOP) i `skip_turn` (milczenie, gdy psycholog milczy); `turn_timeout` 20 s. Wbudowany filtr `self_harm` jest wyłączony celowo, bo pacjent musi móc zasygnalizować myśli rezygnacyjne.
 
 ## Format wiadomości reżysera
 
