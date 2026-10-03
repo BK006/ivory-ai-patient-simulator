@@ -6,7 +6,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { eleven, getConfig, HttpError, isSupervisor, json, requireUser, serve, setConfig } from "../_shared/common.ts";
 import { buildPatientVariables, PATIENT_PROMPT } from "../_shared/patient-prompt.ts";
 
-const AGENT_LLM = Deno.env.get("ELEVENLABS_LLM") || "gpt-4.1-mini";
+const AGENT_LLM = Deno.env.get("ELEVENLABS_LLM") || "gpt-5.4-mini";
 const DEFAULT_VOICE = Deno.env.get("ELEVENLABS_DEFAULT_VOICE") || "wJmRkw9W1EUa95AGkMrg";
 
 // Defaults so the agent can also be tried from the ElevenLabs dashboard.
