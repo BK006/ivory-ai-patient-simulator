@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, RotateCcw } from "lucide-react";
+import { CalendarPlus, FileText, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -106,15 +106,16 @@ export default function ReportPage({ params }: { params: Promise<{ sessionId: st
       <div style={{ display: "grid", gap: 32, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 8 }}>
-            <span style={{ font: "var(--type-body-s)", color: "var(--text-tertiary)" }}>{sc.module} · {sc.title}</span>
+            <span style={{ font: "var(--type-body-s)", color: "var(--text-tertiary)" }}>{sc.title}</span>
             <h1 style={{ margin: 0, font: "var(--type-h1)", letterSpacing: "var(--tracking-display)" }}>{sc.personas.name}, {sc.personas.age}</h1>
             <span style={{ font: "var(--type-body-s)", color: "var(--text-secondary)" }}>
-              {fmtDate(s.created_at)} · {fmtTime(v.duration)} min · {s.mode === "exam" ? "tryb egzaminu" : "tryb treningu"}
+              {(s as { kind?: string }).kind === "followup" ? "Kolejna wizyta" : "Pierwsza wizyta"} · {fmtDate(s.created_at)} · {fmtTime(v.duration)} min · {s.mode === "exam" ? "tryb egzaminu" : "tryb treningu"}
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <Button variant="secondary" iconLeft={<FileText size={16} strokeWidth={1.5} />} onClick={() => setShowTranscript(true)}>Transkrypcja</Button>
-            <Button href={`/sesja/${s.scenario_id}`} iconLeft={<RotateCcw size={16} strokeWidth={1.5} />}>Powtórz scenariusz</Button>
+            <Button variant="secondary" href={`/sesja/${s.scenario_id}`} iconLeft={<RotateCcw size={16} strokeWidth={1.5} />}>Powtórz od nowa</Button>
+            <Button href={`/sesja/${s.scenario_id}?po=${s.id}`} iconLeft={<CalendarPlus size={16} strokeWidth={1.5} />}>Umów kolejną wizytę</Button>
           </div>
         </div>
 

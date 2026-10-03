@@ -231,7 +231,7 @@ export function NextSteps({ items }: { items: string[] }) {
   );
 }
 
-export function NeedsList({ needs }: { needs: { id: string; label: string; discovered: boolean; unlocked_at_s: number | null; missed_hint: string }[] }) {
+export function NeedsList({ needs }: { needs: { id: string; label: string; discovered: boolean; from_previous?: boolean; unlocked_at_s: number | null; missed_hint: string }[] }) {
   const found = needs.filter((n) => n.discovered).length;
   return (
     <div style={{ display: "grid", gap: 12, padding: 24, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-l)" }}>
@@ -246,7 +246,7 @@ export function NeedsList({ needs }: { needs: { id: string; label: string; disco
           </span>
           <div style={{ display: "grid", gap: 4 }}>
             <span style={{ font: "var(--type-body-s)", fontWeight: 500, color: n.discovered ? "var(--text-primary)" : "var(--text-secondary)" }}>
-              {n.label}{n.discovered && n.unlocked_at_s != null ? ` · ${fmtTime(n.unlocked_at_s)}` : ""}
+              {n.label}{n.from_previous ? " · z poprzedniej wizyty" : n.discovered && n.unlocked_at_s != null ? ` · ${fmtTime(n.unlocked_at_s)}` : ""}
             </span>
             {!n.discovered && <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>Co mogło otworzyć: {n.missed_hint}</span>}
           </div>

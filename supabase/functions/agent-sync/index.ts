@@ -12,7 +12,7 @@ const DEFAULT_VOICE = Deno.env.get("ELEVENLABS_DEFAULT_VOICE") || "wJmRkw9W1EUa9
 // Defaults so the agent can also be tried from the ElevenLabs dashboard.
 const PLACEHOLDERS = buildPatientVariables(
   { rola: "Marek, 54 lata, magazynier z Krakowa.", plec_postaci: "mężczyzna", pierwsza_wypowiedz: "Dzień dobry." },
-  { module: "Pierwsza wizyta" },
+  { kind: "first" },
 );
 
 function agentConfig() {
@@ -38,7 +38,7 @@ function agentConfig() {
           },
         },
       },
-      tts: { ...(DEFAULT_VOICE ? { voice_id: DEFAULT_VOICE } : {}), model_id: "eleven_flash_v2_5" },
+      tts: { ...(DEFAULT_VOICE ? { voice_id: DEFAULT_VOICE } : {}), model_id: "eleven_v4_turbo", expressive_mode: true },
       turn: { turn_eagerness: "patient" },
       conversation: { max_duration_seconds: 1200 },
     },

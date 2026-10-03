@@ -239,7 +239,7 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
     if (error) throw error;
   }
 
-  const [{ data: scenario }, { data: events }, { data: needs }] = await Promise.all([
+  const [{ data: scenario }, { data: events }, { data: needs }, { data: sessionRow }] = await Promise.all([
     db().from("scenarios").select("trust_start, rubric_id").eq("id", scenarioId).single(),
     db()
       .from("director_events")
@@ -247,9 +247,13 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
       .eq("session_id", sessionId)
       .order("created_at"),
     db().from("hidden_needs").select("id, ord, label, required_tags, missed_hint").eq("scenario_id", scenarioId).order("ord"),
+    db().from("sessions").select("trust, carried_need_ids").eq("id", sessionId).single(),
   ]);
+  const carried = new Set<string>(sessionRow?.carried_need_ids ?? []);
   const log = (events ?? []) as DirectorEvent[];
-  const metrics = computeMetrics(turns, log, scenario!.trust_start);
+  // Follow-up visits start from the trust carried over from the previous visit.
+  const trustStart = log[0]?.trust_before ?? sessionRow?.trust ?? scenario!.trust_start;
+  const metrics = computeMetrics(turns, log, trustStart);
 
   // Needs: unlocked by trust (director log); some also require a specific tag at/after unlock.
   const needsReport = (needs ?? []).map((n) => {
@@ -258,10 +262,12 @@ async function evaluate(sessionId: string, conversationId: string, scenarioId: s
       unlockIdx >= 0 &&
       (n.required_tags.length === 0 ||
         log.slice(unlockIdx).some((e) => n.required_tags.some((t: string) => e.tags.includes(t))));
+    const fromPrevious = carried.has(n.id);
     return {
       id: n.id,
       label: n.label,
-      discovered: unlockIdx >= 0 && tagsOk,
+      discovered: fromPrevious || (unlockIdx >= 0 && tagsOk),
+      from_previous: fromPrevious,
       unlocked_at_s: unlockIdx >= 0 ? log[unlockIdx].t_s : null,
       missed_hint: n.missed_hint,
     };

@@ -94,7 +94,7 @@ export function usePatientSession() {
   };
 
   const start = useCallback(
-    async (scenarioId: string, mode: SessionMode) => {
+    async (scenarioId: string, mode: SessionMode, previousSessionId?: string) => {
       setError(null);
       setTranscript([]);
       setTrustHistory([]);
@@ -102,7 +102,11 @@ export function usePatientSession() {
       setPhase("connecting");
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
-        const res = await callFn<StartResponse>("session-start", { scenario_id: scenarioId, mode });
+        const res = await callFn<StartResponse>("session-start", {
+          scenario_id: scenarioId,
+          mode,
+          ...(previousSessionId ? { previous_session_id: previousSessionId } : {}),
+        });
         sessionRef.current = res.session_id;
         setSessionId(res.session_id);
         setTrust(res.trust);

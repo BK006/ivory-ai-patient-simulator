@@ -2,8 +2,9 @@
 // only of {{dynamic variables}}. This file builds those variables for a session:
 //   - persona-specific values come from personas.vars (DB),
 //   - SHARED_* texts (guardrails, disclosure rules, end conditions) are identical for every persona,
-//   - the module (first visit / regular client) sets the situation; conditions (depression, insomnia…)
-//     are part of the persona, not the module. One intensity level for now (persona may override).
+//   - the visit kind sets the situation: first visit (psychologist knows nothing) or follow-up
+//     (previous transcript + summary in {{poprzednia_wizyta}}); conditions are part of the persona.
+//   - one intensity level for now (persona may override).
 // Mirrored for humans in prompts/base-prompt.md.
 
 export const PATIENT_PROMPT = `# SYTUACJA
@@ -24,6 +25,9 @@ Płeć postaci: {{plec_postaci}}. Konsekwentnie używaj form gramatycznych zgodn
 
 # NASTAWIENIE DO TERAPII
 {{nastawienie}}
+
+# POPRZEDNIA WIZYTA
+{{poprzednia_wizyta}}
 
 # ROZMÓWCA
 Rozmówca to psycholog lub student psychologii, który na tobie ćwiczy rozmowę. Zwracasz się do niego per Pan/Pani; dopóki nie wiesz, kim jest, unikaj form zależnych od jego płci. Nie jesteś jego asystentem — nie pomagasz mu, nie chwalisz go i nie oceniasz.
@@ -49,7 +53,7 @@ Rozmówca to psycholog lub student psychologii, który na tobie ćwiczy rozmowę
 # WARUNKI ZAKOŃCZENIA ROZMOWY
 {{warunki_zakonczenia}}
 
-# NATĘŻENIE (z poziomu trudności)
+# NATĘŻENIE
 Maksymalnie {{max_zdan}} zdania na wypowiedź.
 Nieufność: {{nieufnosc}}/10 · Otwartość na starcie: {{otwartosc}}/10
 Gadatliwość: {{gadatliwosc}}/10 · Drażliwość: {{drazliwosc}}/10
@@ -72,12 +76,16 @@ export const SHARED_END_CONDITIONS = `- Psycholog wyraźnie zamyka wizytę (pods
 - Rozmówca powiedział STOP (patrz GUARDRAILS).
 - Nie kończysz rozmowy z własnej inicjatywy tylko dlatego, że jesteś zirytowany — najwyżej grozisz wyjściem albo milkniesz.`;
 
-const MODULE_INSTRUCTIONS: Record<string, string> = {
-  "Pierwsza wizyta":
-    "Pierwsza wizyta u tego psychologa. Nie znacie się. To symulacja treningowa dla psychologów: grasz pacjenta, rozmówca ćwiczy prowadzenie rozmowy. Mów naturalnie, jak prawdziwy pacjent na pierwszym spotkaniu.",
-  "Wizyta regularnego klienta":
-    "Kolejna sesja u psychologa, którego już znasz — spotykacie się od kilku tygodni i macie za sobą wcześniejsze rozmowy (szczegóły w HISTORII). To symulacja treningowa dla psychologów: grasz klienta, rozmówca ćwiczy prowadzenie sesji w trakcie terapii. Odnoś się do wcześniejszych spotkań naturalnie, bez streszczania ich.",
+export type VisitKind = "first" | "followup";
+
+const VISIT_INSTRUCTIONS: Record<VisitKind, string> = {
+  first:
+    "Pierwsza wizyta u tego psychologa. Nie znacie się, a psycholog nic o tobie nie wie — sam musi się dowiedzieć, z czym przychodzisz. To symulacja treningowa dla psychologów: grasz pacjenta, rozmówca ćwiczy prowadzenie rozmowy. Mów naturalnie, jak prawdziwy pacjent na pierwszym spotkaniu.",
+  followup:
+    "Kolejna wizyta u tego samego psychologa. Znacie się z poprzedniego spotkania (zapis w sekcji POPRZEDNIA WIZYTA). Pamiętasz, co powiedziałeś/aś i co powiedział psycholog — odnoś się do tego naturalnie, bez streszczania. To, co już ujawniłeś/aś, jest wiadome; rzeczy przemilczane nadal trzeba z ciebie wydobyć. To symulacja treningowa dla psychologów.",
 };
+
+const NO_PREVIOUS_VISIT = "To wasze pierwsze spotkanie. Nie było wcześniejszych rozmów.";
 
 // Single intensity level for the MVP; a persona can override any of these keys.
 const INTENSITY: Record<string, string> = { max_zdan: "3", nieufnosc: "6", otwartosc: "4", gadatliwosc: "4", drazliwosc: "5" };
@@ -85,10 +93,11 @@ const INTENSITY: Record<string, string> = { max_zdan: "3", nieufnosc: "6", otwar
 /** All variables the agent prompt expects. Missing persona keys fall back to neutral defaults. */
 export function buildPatientVariables(
   personaVars: Record<string, string>,
-  scenario: { module: string },
+  visit: { kind: VisitKind; previousVisit?: string },
 ): Record<string, string> {
+  const { pierwsza_wypowiedz_kolejna, ...persona } = personaVars;
+  const followup = visit.kind === "followup";
   return {
-    instrukcja_modulu: MODULE_INSTRUCTIONS[scenario.module] ?? MODULE_INSTRUCTIONS["Pierwsza wizyta"],
     rola: "",
     plec_postaci: "",
     historia: "",
@@ -102,7 +111,10 @@ export function buildPatientVariables(
     dodatkowe_zachowanie: "",
     pierwsza_wypowiedz: "Dzień dobry.",
     ...INTENSITY,
-    ...personaVars,
+    ...persona,
+    ...(followup ? { pierwsza_wypowiedz: pierwsza_wypowiedz_kolejna || "Dzień dobry. Jestem znowu." } : {}),
+    instrukcja_modulu: VISIT_INSTRUCTIONS[visit.kind],
+    poprzednia_wizyta: followup && visit.previousVisit ? visit.previousVisit : NO_PREVIOUS_VISIT,
     // Shared for every persona – never taken from the DB.
     zasady_ujawniania: SHARED_DISCLOSURE_RULES,
     guardrails: SHARED_GUARDRAILS,

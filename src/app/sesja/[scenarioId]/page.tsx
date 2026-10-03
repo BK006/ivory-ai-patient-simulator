@@ -8,37 +8,57 @@ import { use, useCallback, useEffect, useState } from "react";
 import { ClientBrief, LiveCaption, TrustMeter, VoiceControls, VoiceVisualizer, type BriefData, type Speaker } from "@/components/ivory/session";
 import { Badge, Button, Dialog, PageHead, SegmentedTabs } from "@/components/ivory/ui";
 import { usePatientSession } from "@/hooks/usePatientSession";
-import { listScenarios, type ScenarioCard } from "@/lib/queries";
+import { fmtDate, listScenarios, loadPreviousVisit, type ScenarioCard } from "@/lib/queries";
 import type { SessionMode } from "@/lib/types";
 
 const MODES = ["Trening", "Egzamin"] as const;
 
-function toBrief(s: ScenarioCard): BriefData {
+type PreviousVisit = NonNullable<Awaited<ReturnType<typeof loadPreviousVisit>>>;
+
+/** First visit: the psychologist knows only name and age. Follow-up: notes from the previous visit. */
+function toBrief(s: ScenarioCard, prev: PreviousVisit | null): BriefData {
+  if (!prev) {
+    return {
+      module: "Pierwsza wizyta",
+      name: s.personas.name,
+      age: s.personas.age,
+      reason: `${s.briefing.source}: ${s.briefing.reason}`,
+      unknown: s.briefing.unknown,
+      goal: s.goal ?? undefined,
+    };
+  }
+  const needs = prev.metrics?.needs ?? [];
+  const known = needs.filter((n) => n.discovered).map((n) => n.label);
+  const hidden = needs.length - known.length;
   return {
-    module: s.module,
+    module: "Kolejna wizyta",
     name: s.personas.name,
     age: s.personas.age,
     occupation: s.personas.occupation ?? undefined,
-    situation: s.personas.vars.historia,
-    reason: `${s.briefing.source}: ${s.briefing.reason}`,
-    background: [...s.briefing.known, s.briefing.note].filter(Boolean).join(" · "),
-    unknown: s.briefing.unknown,
-    goal: s.goal ?? undefined,
+    rows: [
+      { label: "Poprzednia wizyta", value: fmtDate(prev.created_at) },
+      { label: "Notatka", value: prev.summary ?? "Brak notatki." },
+      { label: "Co już wiesz", value: known.length ? known.join(" · ") : "Pacjent niewiele o sobie powiedział." },
+      { label: "Czego nie wiesz", value: hidden > 0 ? `Pacjent wciąż coś przemilcza (${hidden} ${hidden === 1 ? "temat" : hidden < 5 ? "tematy" : "tematów"}).` : "Wszystkie ukryte tematy wyszły na jaw – pogłęb je." },
+      { label: "Cel sesji", value: "Nawiąż do poprzedniej rozmowy, pogłęb to, co już wiesz, i dowiedz się, co pacjent wciąż przemilcza. Sprawdź, jak się czuje od ostatniego spotkania." },
+    ],
   };
 }
 
-export default function SessionPage({ params }: { params: Promise<{ scenarioId: string }> }) {
+export default function SessionPage({ params, searchParams }: { params: Promise<{ scenarioId: string }>; searchParams: Promise<{ po?: string }> }) {
   const { scenarioId } = use(params);
+  const { po } = use(searchParams);
   return (
     <ConversationProvider>
-      <SessionFlow scenarioId={scenarioId} />
+      <SessionFlow scenarioId={scenarioId} previousSessionId={po} />
     </ConversationProvider>
   );
 }
 
-function SessionFlow({ scenarioId }: { scenarioId: string }) {
+function SessionFlow({ scenarioId, previousSessionId }: { scenarioId: string; previousSessionId?: string }) {
   const router = useRouter();
   const [all, setAll] = useState<ScenarioCard[] | null>(null);
+  const [prev, setPrev] = useState<PreviousVisit | null | undefined>(previousSessionId ? undefined : null);
   const [mode, setMode] = useState<(typeof MODES)[number]>("Trening");
   const [consent, setConsent] = useState(true);
   const s = usePatientSession();
@@ -48,6 +68,13 @@ function SessionFlow({ scenarioId }: { scenarioId: string }) {
   }, []);
 
   useEffect(() => {
+    if (!previousSessionId) return;
+    loadPreviousVisit(previousSessionId)
+      .then((p) => setPrev(p && p.scenario_id === scenarioId && p.status === "evaluated" ? p : null))
+      .catch(() => setPrev(null));
+  }, [previousSessionId, scenarioId]);
+
+  useEffect(() => {
     if (s.phase === "done" && s.sessionId) router.push(`/raporty/${s.sessionId}`);
   }, [s.phase, s.sessionId, router]);
 
@@ -55,10 +82,11 @@ function SessionFlow({ scenarioId }: { scenarioId: string }) {
   if (all && !scenario) {
     return <PageHead eyebrow="Nie znaleziono" title="Ten scenariusz nie istnieje" right={<Button href="/moduly">Moduły</Button>} />;
   }
-  if (!scenario) return <div style={{ font: "var(--type-body-s)", color: "var(--text-tertiary)" }}>Ładowanie…</div>;
+  if (!scenario || prev === undefined) return <div style={{ font: "var(--type-body-s)", color: "var(--text-tertiary)" }}>Ładowanie…</div>;
 
-  const pool = all!.filter((x) => x.module === scenario.module);
-  const brief = toBrief(scenario);
+  const followup = Boolean(prev);
+  const pool = followup ? [scenario] : all!.filter((x) => x.module === scenario.module);
+  const brief = toBrief(scenario, prev);
 
   if (s.phase === "idle" || s.phase === "error") {
     const reroll = () => {
@@ -70,7 +98,7 @@ function SessionFlow({ scenarioId }: { scenarioId: string }) {
         <Link href="/moduly" style={{ justifySelf: "start", display: "inline-flex", alignItems: "center", gap: 6, font: "var(--type-body-s)", color: "var(--text-secondary)" }}>
           <ArrowLeft size={16} strokeWidth={1.5} />Moduły
         </Link>
-        <PageHead eyebrow={`Moduł · ${scenario.module}`} title="Twój pacjent" />
+        <PageHead eyebrow={`Moduł · ${followup ? "Kolejna wizyta" : "Pierwsza wizyta"}`} title={followup ? `Kolejna wizyta: ${scenario.personas.name}` : "Twój pacjent"} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 24, alignItems: "start" }}>
           <div style={{ gridColumn: "span 2", minWidth: 0 }} className="brief-main">
             <ClientBrief {...brief} />
@@ -94,15 +122,19 @@ function SessionFlow({ scenarioId }: { scenarioId: string }) {
             {s.error && <span style={{ font: "var(--type-body-s)", color: "var(--negative-text)" }}>{s.error}</span>}
             <div style={{ display: "grid", gap: 8 }}>
               <Button size="l" fullWidth disabled={!consent} iconRight={<ArrowRight size={18} strokeWidth={1.5} />}
-                onClick={() => s.start(scenario.id, (mode === "Trening" ? "training" : "exam") as SessionMode)}>
+                onClick={() => s.start(scenario.id, (mode === "Trening" ? "training" : "exam") as SessionMode, prev?.id)}>
                 Rozpocznij symulację
               </Button>
-              <Button variant="ghost" fullWidth iconLeft={<Shuffle size={16} strokeWidth={1.5} />} disabled={pool.length < 2} onClick={reroll}>
-                Losuj innego pacjenta
-              </Button>
-              <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)", textAlign: "center" }}>
-                {pool.length} {pool.length === 1 ? "pacjent" : "pacjentów"} w puli
-              </span>
+              {!followup && (
+                <>
+                  <Button variant="ghost" fullWidth iconLeft={<Shuffle size={16} strokeWidth={1.5} />} disabled={pool.length < 2} onClick={reroll}>
+                    Losuj innego pacjenta
+                  </Button>
+                  <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)", textAlign: "center" }}>
+                    {pool.length} {pool.length === 1 ? "pacjent" : "pacjentów"} w puli
+                  </span>
+                </>
+              )}
             </div>
           </aside>
         </div>

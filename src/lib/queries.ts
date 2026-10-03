@@ -20,6 +20,8 @@ export type ScenarioCard = {
 export type SessionSummary = {
   id: string;
   status: string;
+  kind: "first" | "followup";
+  summary: string | null;
   mode: string;
   overall_score: number | null;
   started_at: string | null;
@@ -49,7 +51,7 @@ export async function listMySessions(): Promise<SessionSummary[]> {
   const uid = await ensureUser();
   const { data, error } = await supabase
     .from("sessions")
-    .select("id, status, mode, overall_score, started_at, ended_at, created_at, scenario_id, scenarios(title, module, personas(name, age))")
+    .select("id, status, kind, summary, mode, overall_score, started_at, ended_at, created_at, scenario_id, scenarios(title, module, personas(name, age))")
     .eq("user_id", uid)
     .in("status", ["evaluating", "evaluated", "failed"])
     .order("created_at", { ascending: false });
@@ -57,12 +59,24 @@ export async function listMySessions(): Promise<SessionSummary[]> {
   return data as unknown as SessionSummary[];
 }
 
+/** Notes the psychologist has from an earlier visit (shown in the follow-up brief). */
+export async function loadPreviousVisit(sessionId: string) {
+  await ensureUser();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id, status, summary, metrics, created_at, scenario_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as { id: string; status: string; summary: string | null; metrics: { needs?: { label: string; discovered: boolean }[] } | null; created_at: string; scenario_id: string } | null;
+}
+
 export async function loadReport(sessionId: string) {
   await ensureUser();
   const [session, scores, coaching, turns] = await Promise.all([
     supabase
       .from("sessions")
-      .select("id, status, mode, overall_score, summary, metrics, audio_path, started_at, ended_at, created_at, scenario_id, scenarios(title, module, personas(name, age))")
+      .select("id, status, kind, mode, overall_score, summary, metrics, audio_path, started_at, ended_at, created_at, scenario_id, scenarios(title, module, personas(name, age))")
       .eq("id", sessionId)
       .maybeSingle(),
     supabase

@@ -64,9 +64,11 @@ function BriefRow({ label, children, compact }: { label: string; children: React
 export type BriefData = {
   module?: string; name: string; age?: number; occupation?: string;
   situation?: string; reason?: string; background?: string; goal?: string; unknown?: string[];
+  /** Replaces the default rows (used by follow-up visits). */
+  rows?: { label: string; value: string }[];
 };
 
-export function ClientBrief({ module, name, age, occupation, situation, reason, background, goal, unknown, compact }: BriefData & { compact?: boolean }) {
+export function ClientBrief({ module, name, age, occupation, situation, reason, background, goal, unknown, rows, compact }: BriefData & { compact?: boolean }) {
   return (
     <div style={{ display: "grid", gap: 20, padding: compact ? 20 : 32, minWidth: 0, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-xl)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -77,6 +79,9 @@ export function ClientBrief({ module, name, age, occupation, situation, reason, 
           {occupation && <span style={{ font: "var(--type-body-s)", color: "var(--text-secondary)" }}>{occupation}</span>}
         </div>
       </div>
+      {rows ? (
+        <div>{rows.map((r) => <BriefRow key={r.label} compact={compact} label={r.label}>{r.value}</BriefRow>)}</div>
+      ) : (
       <div>
         {situation && <BriefRow compact={compact} label="Sytuacja życiowa">{situation}</BriefRow>}
         {reason && <BriefRow compact={compact} label="Powód zgłoszenia">{reason}</BriefRow>}
@@ -84,6 +89,7 @@ export function ClientBrief({ module, name, age, occupation, situation, reason, 
         {unknown && unknown.length > 0 && <BriefRow compact={compact} label="Czego nie wiemy">{unknown.join(" · ")}</BriefRow>}
         {goal && <BriefRow compact={compact} label="Cel sesji">{goal}</BriefRow>}
       </div>
+      )}
     </div>
   );
 }

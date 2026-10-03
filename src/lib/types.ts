@@ -52,6 +52,7 @@ export type NeedReport = {
   id: string;
   label: string;
   discovered: boolean;
+  from_previous?: boolean;
   unlocked_at_s: number | null;
   missed_hint: string;
 };
