@@ -385,10 +385,13 @@ turn_idx i quote: najważniejszy dowód – DOSŁOWNY cytat (3–25 słów) z je
       const a = run.find((x) => x.id === n.id);
       if (!a) return [];
       let depth = Math.max(0, Math.min(100, Math.round(a.depth)));
-      const idx = depth > 0 ? locateQuote(turns, a.turn_idx, a.quote) : null;
-      if (idx === null) depth = 0; // unverifiable evidence → nothing counted
-      else if (depth >= 50 && locateQuote(patientTurns, a.turn_idx, a.quote) === null) depth = 40; // the patient never said it
-      return [{ depth, quote: depth > 0 ? a.quote : null, t_s: idx === null ? null : turns.find((t) => t.idx === idx)?.t_start_s ?? null, reason: a.reason }];
+      const idx = depth > 0 ? locateQuoteLoose(turns, a.turn_idx, a.quote) : null;
+      let reason = a.reason;
+      if (depth > 0 && idx === null) {
+        depth = 0; // unverifiable evidence → nothing counted
+        reason = "Brak dowodu: podany cytat nie występuje w transkrypcie.";
+      } else if (depth >= 50 && locateQuoteLoose(patientTurns, a.turn_idx, a.quote) === null) depth = 40; // the patient never said it
+      return [{ depth, quote: depth > 0 ? a.quote : null, t_s: idx === null ? null : turns.find((t) => t.idx === idx)?.t_start_s ?? null, reason }];
     });
     if (!verified.length) continue;
     const med = median(verified.map((v) => v.depth));
@@ -396,6 +399,33 @@ turn_idx i quote: najważniejszy dowód – DOSŁOWNY cytat (3–25 słów) z je
     result.set(n.id, { ...rep, depth: Math.round(med) });
   }
   return result;
+}
+
+/**
+ * Like locateQuote, but tolerates small transcription/quoting differences: at least 85 % of the quote's
+ * words must appear in one turn, in order. Used for need evidence, where models often trim or merge words.
+ */
+function locateQuoteLoose(turns: Turn[], claimedIdx: number, quote: string): number | null {
+  const exact = locateQuote(turns, claimedIdx, quote);
+  if (exact !== null) return exact;
+  const q = normalize(quote).split(" ").filter(Boolean);
+  if (q.length < 3) return null;
+  const matches = (t: Turn) => {
+    const words = normalize(t.text).split(" ");
+    let pos = 0;
+    let found = 0;
+    for (const w of q) {
+      const at = words.indexOf(w, pos);
+      if (at >= 0) {
+        found++;
+        pos = at + 1;
+      }
+    }
+    return found / q.length >= 0.85;
+  };
+  const claimed = turns.find((t) => t.idx === claimedIdx);
+  if (claimed && matches(claimed)) return claimed.idx;
+  return turns.find(matches)?.idx ?? null;
 }
 
 function transcriptText(turns: Turn[]): string {
