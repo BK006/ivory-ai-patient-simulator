@@ -7,6 +7,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "npm:zod@4";
 import { db, eleven, getConfig, HttpError, json, requireUser, serve } from "../_shared/common.ts";
+import { buildPatientVariables } from "../_shared/patient-prompt.ts";
 
 const StartBody = z.object({
   scenario_id: z.uuid(),
@@ -41,7 +42,7 @@ serve(async (req) => {
 
   const { data: scenario, error: scErr } = await db()
     .from("scenarios")
-    .select("id, title, trust_start, is_published, personas(id, name, voice_id, vars)")
+    .select("id, title, module, difficulty, trust_start, is_published, personas(id, name, voice_id, vars)")
     .eq("id", start.data.scenario_id)
     .maybeSingle();
   if (scErr) throw scErr;
@@ -67,13 +68,13 @@ serve(async (req) => {
     .single();
   if (error) throw error;
 
-  const vars = persona.vars as Record<string, string>;
+  const vars = buildPatientVariables(persona.vars as Record<string, string>, scenario);
   return json({
     session_id: session.id,
     conversation_token: token,
     dynamic_variables: vars,
     overrides: {
-      agent: { firstMessage: vars.opening_line },
+      agent: { firstMessage: vars.pierwsza_wypowiedz },
       ...(persona.voice_id ? { tts: { voiceId: persona.voice_id } } : {}),
     },
     trust: scenario.trust_start,

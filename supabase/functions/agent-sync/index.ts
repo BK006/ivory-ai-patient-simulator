@@ -1,32 +1,44 @@
-// Edge Function: create or update the single ElevenLabs patient agent from code.
+// Edge Function: create or update the ElevenLabs patient agent ("psycholog DONT DELETE") from code.
 //   POST → (supervisor only) upserts the agent config and stores its id in app_config.agent_id
 // Keeps the agent definition versioned in the repo and the ElevenLabs key in secrets.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { eleven, getConfig, HttpError, isSupervisor, json, requireUser, serve, setConfig } from "../_shared/common.ts";
-import { PATIENT_PROMPT, PATIENT_VAR_PLACEHOLDERS } from "../_shared/patient-prompt.ts";
+import { buildPatientVariables, PATIENT_PROMPT } from "../_shared/patient-prompt.ts";
 
 const AGENT_LLM = Deno.env.get("ELEVENLABS_LLM") || "gpt-5.4-mini";
-const DEFAULT_VOICE = Deno.env.get("ELEVENLABS_DEFAULT_VOICE") || "JBFqnCBsd6RMkjVDRZzb";
+const DEFAULT_VOICE = Deno.env.get("ELEVENLABS_DEFAULT_VOICE");
+
+// Defaults so the agent can also be tried from the ElevenLabs dashboard.
+const PLACEHOLDERS = buildPatientVariables(
+  { rola: "Marek, 54 lata, magazynier z Krakowa.", plec_postaci: "mężczyzna", pierwsza_wypowiedz: "Dzień dobry." },
+  { module: "Pierwsza wizyta", difficulty: 2 },
+);
 
 function agentConfig() {
   return {
-    name: "Próbna Sesja – pacjent",
-    tags: ["probna-sesja", "hackyeah-2026"],
+    name: "psycholog DONT DELETE",
+    tags: ["probna-sesja", "hackyeah-2026", "psycholog"],
     conversation_config: {
       agent: {
-        first_message: "{{opening_line}}",
+        first_message: "{{pierwsza_wypowiedz}}",
         language: "pl",
         disable_first_message_interruptions: true,
-        dynamic_variables: { dynamic_variable_placeholders: PATIENT_VAR_PLACEHOLDERS },
+        dynamic_variables: { dynamic_variable_placeholders: PLACEHOLDERS },
         prompt: {
           prompt: PATIENT_PROMPT,
           llm: AGENT_LLM,
           temperature: 0.8,
-          built_in_tools: { end_call: {} },
+          built_in_tools: {
+            end_call: {
+              name: "end_call",
+              description: "Zakończ rozmowę, gdy spełnione są warunki zakończenia albo rozmówca powiedział STOP.",
+              params: { system_tool_type: "end_call" },
+            },
+          },
         },
       },
-      tts: { voice_id: DEFAULT_VOICE, model_id: "eleven_flash_v2_5" },
+      tts: { ...(DEFAULT_VOICE ? { voice_id: DEFAULT_VOICE } : {}), model_id: "eleven_flash_v2_5" },
       turn: { turn_eagerness: "patient" },
       conversation: { max_duration_seconds: 1200 },
     },

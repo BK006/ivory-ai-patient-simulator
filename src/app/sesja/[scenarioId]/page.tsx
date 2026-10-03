@@ -19,7 +19,7 @@ function toBrief(s: ScenarioCard): BriefData {
     name: s.personas.name,
     age: s.personas.age,
     occupation: s.personas.occupation ?? undefined,
-    situation: s.personas.vars.background,
+    situation: s.personas.vars.historia,
     reason: `${s.briefing.source}: ${s.briefing.reason}`,
     background: [...s.briefing.known, s.briefing.note].filter(Boolean).join(" · "),
     unknown: s.briefing.unknown,
