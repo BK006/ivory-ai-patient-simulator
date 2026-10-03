@@ -6,13 +6,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { eleven, getConfig, HttpError, isSupervisor, json, requireUser, serve, setConfig } from "../_shared/common.ts";
 import { buildPatientVariables, PATIENT_PROMPT } from "../_shared/patient-prompt.ts";
 
-const AGENT_LLM = Deno.env.get("ELEVENLABS_LLM") || "gpt-5.4-mini";
-const DEFAULT_VOICE = Deno.env.get("ELEVENLABS_DEFAULT_VOICE");
+const AGENT_LLM = Deno.env.get("ELEVENLABS_LLM") || "gpt-4.1-mini";
+const DEFAULT_VOICE = Deno.env.get("ELEVENLABS_DEFAULT_VOICE") || "wJmRkw9W1EUa95AGkMrg";
 
 // Defaults so the agent can also be tried from the ElevenLabs dashboard.
 const PLACEHOLDERS = buildPatientVariables(
   { rola: "Marek, 54 lata, magazynier z Krakowa.", plec_postaci: "mężczyzna", pierwsza_wypowiedz: "Dzień dobry." },
-  { module: "Pierwsza wizyta", difficulty: 2 },
+  { module: "Pierwsza wizyta" },
 );
 
 function agentConfig() {

@@ -108,8 +108,8 @@ export function usePatientSession() {
         setTrust(res.trust);
         setTrustHistory([{ t_s: 0, trust: res.trust, delta: 0 }]);
         conversation.startSession({
-          conversationToken: res.conversation_token,
-          connectionType: "webrtc",
+          signedUrl: res.signed_url,
+          connectionType: "websocket",
           dynamicVariables: res.dynamic_variables,
           overrides: res.overrides,
         });

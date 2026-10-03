@@ -1,6 +1,6 @@
 # Agent ElevenLabs: „psycholog DONT DELETE”
 
-`agent_3901m413y28de06sy1w54d9gea8g` · język `pl` · LLM `gpt-5.4-mini` · TTS `eleven_flash_v2_5` · `first_message = {{pierwsza_wypowiedz}}`
+`agent_3901m413y28de06sy1w54d9gea8g` · język `pl` · LLM `gpt-4.1-mini` · TTS `eleven_flash_v2_5` · `first_message = {{pierwsza_wypowiedz}}`
 
 Prompt agenta składa się wyłącznie ze zmiennych dynamicznych. Źródło prawdy i treść wspólnych sekcji: `supabase/functions/_shared/patient-prompt.ts`.
 

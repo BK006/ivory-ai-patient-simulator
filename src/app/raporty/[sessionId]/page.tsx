@@ -61,7 +61,7 @@ export default function ReportPage({ params }: { params: Promise<{ sessionId: st
   if (!report) return <div style={{ font: "var(--type-body-s)", color: "var(--text-tertiary)" }}>Ładowanie raportu…</div>;
   if (!report.session) return <PageHead eyebrow="Nie znaleziono" title="Ten raport nie istnieje" right={<Button href="/raporty">Raporty</Button>} />;
 
-  const sc = report.session.scenarios as unknown as { title: string; module: string; difficulty: number; personas: { name: string; age: number } };
+  const sc = report.session.scenarios as unknown as { title: string; module: string; personas: { name: string; age: number } };
 
   if (report.session.status !== "evaluated") {
     const failed = report.session.status === "failed";

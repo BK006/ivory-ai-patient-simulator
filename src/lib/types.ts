@@ -18,7 +18,6 @@ export type Briefing = {
 export type Scenario = {
   id: string;
   title: string;
-  difficulty: 1 | 2 | 3;
   skills: string[];
   briefing: Briefing;
   est_minutes: number;
@@ -30,7 +29,7 @@ export type SessionMode = "training" | "exam";
 
 export type StartResponse = {
   session_id: string;
-  conversation_token: string;
+  signed_url: string;
   dynamic_variables: Record<string, string>;
   overrides: { agent?: { firstMessage?: string }; tts?: { voiceId?: string } };
   trust: number;

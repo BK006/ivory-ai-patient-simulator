@@ -297,12 +297,3 @@ export function EmptyState({ title, text, action }: { title: string; text?: stri
     </div>
   );
 }
-
-export function Difficulty({ level }: { level: number }) {
-  const label = { 1: "Łatwy", 2: "Średni", 3: "Trudny" }[level as 1 | 2 | 3];
-  return (
-    <span title={`Trudność: ${label}`} style={{ display: "inline-flex", gap: 3 }}>
-      {[1, 2, 3].map((i) => <span key={i} style={{ width: 6, height: 14, borderRadius: 3, background: i <= level ? "var(--graphite-900)" : "var(--ivory-300)" }} />)}
-    </span>
-  );
-}

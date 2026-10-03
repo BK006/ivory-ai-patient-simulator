@@ -11,7 +11,6 @@ export type ScenarioCard = {
   module: string;
   module_description: string | null;
   goal: string | null;
-  difficulty: number;
   skills: string[];
   est_minutes: number;
   briefing: { source: string; reason: string; known: string[]; unknown: string[]; note: string };
@@ -34,7 +33,7 @@ export async function listScenarios(): Promise<ScenarioCard[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("scenarios")
-    .select("id, title, module, module_description, goal, difficulty, skills, est_minutes, briefing, personas(id, name, age, occupation, tagline, vars)")
+    .select("id, title, module, module_description, goal, skills, est_minutes, briefing, personas(id, name, age, occupation, tagline, vars)")
     .eq("is_published", true)
     .order("created_at");
   if (error) throw error;
@@ -63,7 +62,7 @@ export async function loadReport(sessionId: string) {
   const [session, scores, coaching, turns] = await Promise.all([
     supabase
       .from("sessions")
-      .select("id, status, mode, overall_score, summary, metrics, audio_path, started_at, ended_at, created_at, scenario_id, scenarios(title, module, difficulty, personas(name, age))")
+      .select("id, status, mode, overall_score, summary, metrics, audio_path, started_at, ended_at, created_at, scenario_id, scenarios(title, module, personas(name, age))")
       .eq("id", sessionId)
       .maybeSingle(),
     supabase

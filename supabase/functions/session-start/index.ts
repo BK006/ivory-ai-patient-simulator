@@ -1,6 +1,8 @@
 // Edge Function: start a training session.
-//   POST { scenario_id, mode }                 → creates the session, returns a WebRTC conversation
-//                                                 token + dynamic variables + voice override
+//   POST { scenario_id, mode }                 → creates the session, returns a signed WebSocket URL
+//                                                 + dynamic variables + voice override
+// WebSocket (not WebRTC): over LiveKit the conversation_initiation_client_data was not delivered,
+// so the agent never received its variables and stayed silent.
 //   POST { action: "bind", session_id, conversation_id } → links the ElevenLabs conversation, marks live
 // Hidden needs are never sent to the browser here; the director feeds them to the actor later.
 
@@ -42,7 +44,7 @@ serve(async (req) => {
 
   const { data: scenario, error: scErr } = await db()
     .from("scenarios")
-    .select("id, title, module, difficulty, trust_start, is_published, personas(id, name, voice_id, vars)")
+    .select("id, title, module, trust_start, is_published, personas(id, name, voice_id, vars)")
     .eq("id", start.data.scenario_id)
     .maybeSingle();
   if (scErr) throw scErr;
@@ -53,8 +55,8 @@ serve(async (req) => {
   const agentId = await getConfig("agent_id");
   if (!agentId) throw new HttpError(503, "Agent pacjenta nie jest skonfigurowany.");
 
-  const tokenRes = await eleven(`/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`);
-  const { token } = await tokenRes.json();
+  const urlRes = await eleven(`/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`);
+  const { signed_url } = await urlRes.json();
 
   const { data: session, error } = await db()
     .from("sessions")
@@ -71,7 +73,7 @@ serve(async (req) => {
   const vars = buildPatientVariables(persona.vars as Record<string, string>, scenario);
   return json({
     session_id: session.id,
-    conversation_token: token,
+    signed_url,
     dynamic_variables: vars,
     overrides: {
       agent: { firstMessage: vars.pierwsza_wypowiedz },

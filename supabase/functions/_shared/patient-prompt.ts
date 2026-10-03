@@ -2,7 +2,8 @@
 // only of {{dynamic variables}}. This file builds those variables for a session:
 //   - persona-specific values come from personas.vars (DB),
 //   - SHARED_* texts (guardrails, disclosure rules, end conditions) are identical for every persona,
-//   - intensity (max sentences, distrust…) comes from the scenario difficulty unless the persona overrides it.
+//   - the module (first visit / regular client) sets the situation; conditions (depression, insomnia…)
+//     are part of the persona, not the module. One intensity level for now (persona may override).
 // Mirrored for humans in prompts/base-prompt.md.
 
 export const PATIENT_PROMPT = `# SYTUACJA
@@ -71,19 +72,23 @@ export const SHARED_END_CONDITIONS = `- Psycholog wyraźnie zamyka wizytę (pods
 - Rozmówca powiedział STOP (patrz GUARDRAILS).
 - Nie kończysz rozmowy z własnej inicjatywy tylko dlatego, że jesteś zirytowany — najwyżej grozisz wyjściem albo milkniesz.`;
 
-const INTENSITY: Record<number, Record<string, string>> = {
-  1: { max_zdan: "4", nieufnosc: "4", otwartosc: "5", gadatliwosc: "6", drazliwosc: "3" },
-  2: { max_zdan: "3", nieufnosc: "6", otwartosc: "4", gadatliwosc: "4", drazliwosc: "5" },
-  3: { max_zdan: "2", nieufnosc: "8", otwartosc: "2", gadatliwosc: "3", drazliwosc: "7" },
+const MODULE_INSTRUCTIONS: Record<string, string> = {
+  "Pierwsza wizyta":
+    "Pierwsza wizyta u tego psychologa. Nie znacie się. To symulacja treningowa dla psychologów: grasz pacjenta, rozmówca ćwiczy prowadzenie rozmowy. Mów naturalnie, jak prawdziwy pacjent na pierwszym spotkaniu.",
+  "Wizyta regularnego klienta":
+    "Kolejna sesja u psychologa, którego już znasz — spotykacie się od kilku tygodni i macie za sobą wcześniejsze rozmowy (szczegóły w HISTORII). To symulacja treningowa dla psychologów: grasz klienta, rozmówca ćwiczy prowadzenie sesji w trakcie terapii. Odnoś się do wcześniejszych spotkań naturalnie, bez streszczania ich.",
 };
+
+// Single intensity level for the MVP; a persona can override any of these keys.
+const INTENSITY: Record<string, string> = { max_zdan: "3", nieufnosc: "6", otwartosc: "4", gadatliwosc: "4", drazliwosc: "5" };
 
 /** All variables the agent prompt expects. Missing persona keys fall back to neutral defaults. */
 export function buildPatientVariables(
   personaVars: Record<string, string>,
-  scenario: { module: string; difficulty: number },
+  scenario: { module: string },
 ): Record<string, string> {
   return {
-    instrukcja_modulu: `${scenario.module}. To symulacja treningowa dla psychologów: grasz pacjenta, rozmówca ćwiczy prowadzenie rozmowy. Mów naturalnie, jak prawdziwy pacjent na wizycie.`,
+    instrukcja_modulu: MODULE_INSTRUCTIONS[scenario.module] ?? MODULE_INSTRUCTIONS["Pierwsza wizyta"],
     rola: "",
     plec_postaci: "",
     historia: "",
@@ -96,7 +101,7 @@ export function buildPatientVariables(
     profil_ryzyka: "Brak sygnałów ryzyka.",
     dodatkowe_zachowanie: "",
     pierwsza_wypowiedz: "Dzień dobry.",
-    ...INTENSITY[scenario.difficulty] ?? INTENSITY[2],
+    ...INTENSITY,
     ...personaVars,
     // Shared for every persona – never taken from the DB.
     zasady_ujawniania: SHARED_DISCLOSURE_RULES,

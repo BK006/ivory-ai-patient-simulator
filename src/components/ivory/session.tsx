@@ -3,26 +3,34 @@
 // Ivory – session components: module card, client brief, live voice visualizer, controls, trust meter.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Difficulty } from "./ui";
 
 const TINTS = ["#E7EEF0", "#E8EEE4", "#F2E9DC", "#F1E3DF", "#E8E6F0"];
 export const initials = (name: string) => (name || "?").split(" ").map((p) => p[0]).join("").slice(0, 2);
 const tintFor = (name: string) => TINTS[(name || "").length % TINTS.length];
 
-export function ModuleCard({ name, description, difficulty, sessions, bestScore, skills = [], onClick }: {
-  name: string; description?: string; difficulty: number; sessions: number; bestScore: number | null; skills?: string[]; onClick?: () => void;
+export function ModuleCard({ name, description, patients, sessions, bestScore, skills = [], onClick }: {
+  name: string; description?: string; patients: { name: string; age: number; tagline: string }[];
+  sessions: number; bestScore: number | null; skills?: string[]; onClick?: () => void;
 }) {
   const [hover, setHover] = useState(false);
   const band = bestScore == null ? null : bestScore >= 75 ? "var(--score-high)" : bestScore >= 50 ? "var(--score-mid)" : "var(--score-low)";
   return (
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{ display: "grid", gridTemplateRows: "auto 1fr auto", gap: 16, padding: 24, minWidth: 0, cursor: onClick ? "pointer" : "default", background: "var(--surface-card)", borderRadius: "var(--radius-l)", border: `1px solid ${hover && onClick ? "var(--line-strong)" : "var(--line-subtle)"}`, transition: "border-color var(--dur-fast) var(--ease-out)" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <span style={{ flex: 1, font: "var(--type-h3)", letterSpacing: "var(--tracking-heading)", textWrap: "pretty" }}>{name}</span>
-        <span style={{ paddingTop: 6 }}><Difficulty level={difficulty} /></span>
-      </div>
-      <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
+      <span style={{ font: "var(--type-h3)", letterSpacing: "var(--tracking-heading)", textWrap: "pretty" }}>{name}</span>
+      <div style={{ display: "grid", gap: 16, alignContent: "start" }}>
         {description && <p style={{ margin: 0, font: "var(--type-body-s)", color: "var(--text-secondary)", textWrap: "pretty" }}>{description}</p>}
+        <div style={{ display: "grid", gap: 10 }}>
+          {patients.map((p) => (
+            <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ width: 32, height: 32, borderRadius: 16, background: tintFor(p.name), display: "grid", placeItems: "center", font: "var(--type-body-s)", color: "var(--stone-700)", flexShrink: 0 }}>{initials(p.name)}</span>
+              <span style={{ display: "grid", minWidth: 0 }}>
+                <span style={{ font: "var(--type-body-s)", fontWeight: 500 }}>{p.name}, {p.age}</span>
+                <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.tagline}</span>
+              </span>
+            </div>
+          ))}
+        </div>
         {skills.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {skills.map((t) => <span key={t} style={{ height: 24, padding: "0 10px", display: "inline-flex", alignItems: "center", borderRadius: "var(--radius-pill)", background: "var(--surface-sunken)", font: "var(--type-caption)", color: "var(--text-secondary)" }}>{t}</span>)}
