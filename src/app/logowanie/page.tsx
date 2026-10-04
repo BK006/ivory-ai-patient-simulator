@@ -10,6 +10,9 @@ const inputStyle = {
   background: "var(--surface-card)", border: "1px solid var(--line-strong)", borderRadius: "var(--radius-s)", outline: "none",
 } as const;
 
+// Demo account for the HackYeah jury – shown openly on purpose.
+const DEMO = { email: "jury@ivory.demo", password: "hackhack12" };
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,6 +41,14 @@ export default function LoginPage() {
             Przećwicz najtrudniejszą rozmowę, zanim odbędzie się naprawdę.
           </p>
         </div>
+        <div style={{ display: "grid", gap: 12, padding: 20, background: "var(--mint-50)", border: "1px solid var(--mint-100)", borderRadius: "var(--radius-l)" }}>
+          <span style={{ font: "var(--type-label)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: "var(--accent-text)" }}>Konto demo dla jury</span>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 16px", font: "var(--type-body-s)" }}>
+            <span style={{ color: "var(--text-secondary)" }}>E-mail</span><span style={{ font: "var(--type-mono)" }}>{DEMO.email}</span>
+            <span style={{ color: "var(--text-secondary)" }}>Hasło</span><span style={{ font: "var(--type-mono)" }}>{DEMO.password}</span>
+          </div>
+          <Button variant="secondary" onClick={() => { setEmail(DEMO.email); setPassword(DEMO.password); }}>Wpisz dane demo</Button>
+        </div>
         <form onSubmit={submit} style={{ display: "grid", gap: 20, padding: 32, background: "var(--surface-card)", border: "1px solid var(--line-subtle)", borderRadius: "var(--radius-xl)" }}>
           <label style={{ display: "grid", gap: 8 }}>
             <span style={{ font: "var(--type-body-s)", fontWeight: 500 }}>E-mail</span>
@@ -53,7 +64,7 @@ export default function LoginPage() {
           </Button>
         </form>
         <span style={{ font: "var(--type-caption)", color: "var(--text-tertiary)" }}>
-          Trening komunikacji, nie terapia ani diagnoza. Dane logowania demo znajdziesz w zgłoszeniu projektu.
+          Trening komunikacji, nie terapia ani diagnoza.
         </span>
       </div>
     </div>
